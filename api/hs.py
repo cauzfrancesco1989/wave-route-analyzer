@@ -9,7 +9,7 @@ import copernicusmarine
 import pandas as pd
 
 DATASET_ID = "cmems_mod_glo_wav_my_0.2deg_PT3H-i"
-VARIABLE = "VHM0"
+VARIABLES = ["VHM0", "VMDR"]
 MAX_POINTS = 100
 MAX_WORKERS = 4
 
@@ -30,7 +30,7 @@ def summarize_point(lon, lat, start, end, season):
     try:
         df = copernicusmarine.read_dataframe(
             dataset_id=DATASET_ID,
-            variables=[VARIABLE],
+            variables=VARIABLES,
             minimum_longitude=float(lon),
             maximum_longitude=float(lon),
             minimum_latitude=float(lat),
@@ -44,15 +44,17 @@ def summarize_point(lon, lat, start, end, season):
         if df is None or len(df) == 0:
             return {"lon": lon, "lat": lat, "count": 0, "error": "Copernicus returned an empty dataframe."}
 
-        if VARIABLE in df.columns:
-            series = df[VARIABLE]
+        if "VHM0" in df.columns:
+            series = df["VHM0"].copy()
         elif "value" in df.columns:
-            series = df["value"]
+            series = df["value"].copy()
         else:
             numeric = [c for c in df.columns if c not in ("time", "latitude", "longitude", "depth")]
             if not numeric:
                 return {"lon": lon, "lat": lat, "count": 0, "error": f"VHM0 column not found. Columns: {list(df.columns)}"}
-            series = df[numeric[0]]
+            series = df[numeric[0]].copy()
+
+        wave_series = df["VMDR"].copy() if "VMDR" in df.columns else None
 
         # Optional meteorological season filter:
         # Season 1 = Dec/Jan/Feb, Season 2 = Mar/Apr/May,
@@ -79,6 +81,8 @@ def summarize_point(lon, lat, start, end, season):
 
                 if month_mask.any():
                     series = series.iloc[month_mask]
+                    if wave_series is not None:
+                        wave_series = wave_series.iloc[month_mask]
                 else:
                     return {
                         "lon": lon, "lat": lat, "count": 0,
@@ -90,19 +94,32 @@ def summarize_point(lon, lat, start, end, season):
                     "error": f"Could not apply the seasonal month filter: {type(exc).__name__}: {exc}"
                 }
 
+        # Keep only finite Hs values. VMDR is kept aligned with the same rows.
         vals = []
-        for x in series.tolist():
-            try:
-                v = float(x)
-                if math.isfinite(v):
-                    vals.append(v)
-            except Exception:
-                pass
+        wave_vals = []
+        if wave_series is not None:
+            for h, w in zip(series.tolist(), wave_series.tolist()):
+                try:
+                    hv = float(h)
+                    wv = float(w)
+                    if math.isfinite(hv) and math.isfinite(wv) and 0.0 <= wv <= 360.0:
+                        vals.append(hv)
+                        wave_vals.append(wv % 360.0)
+                except Exception:
+                    pass
+        else:
+            for x in series.tolist():
+                try:
+                    v = float(x)
+                    if math.isfinite(v):
+                        vals.append(v)
+                except Exception:
+                    pass
 
         if not vals:
             return {"lon": lon, "lat": lat, "count": 0, "error": "VHM0 contained no finite numeric values after the selected season filter."}
 
-        return {
+        result = {
             "lon": lon,
             "lat": lat,
             "count": len(vals),
@@ -113,6 +130,21 @@ def summarize_point(lon, lat, start, end, season):
             "p95": percentile(vals, 0.95),
             "p99": percentile(vals, 0.99),
         }
+
+        # VMDR is circular. Copernicus defines it as the direction waves come
+        # FROM, clockwise from True North. Use a circular mean, not an
+        # arithmetic mean, so 359° and 1° correctly average to ~0°.
+        if wave_vals:
+            sin_mean = sum(math.sin(math.radians(v)) for v in wave_vals) / len(wave_vals)
+            cos_mean = sum(math.cos(math.radians(v)) for v in wave_vals) / len(wave_vals)
+            wave_from = math.degrees(math.atan2(sin_mean, cos_mean)) % 360.0
+            result["wave_from_deg"] = wave_from
+            result["wave_direction_count"] = len(wave_vals)
+        else:
+            result["wave_from_deg"] = None
+            result["wave_direction_count"] = 0
+
+        return result
     except Exception as exc:
         return {"lon": lon, "lat": lat, "count": 0, "error": f"{type(exc).__name__}: {exc}"}
 
@@ -133,7 +165,7 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.split("?")[0] == "/api/health":
             configured = bool(os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME") and os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD"))
-            self._send(200, {"ok": True, "dataset": DATASET_ID, "variable": VARIABLE, "credentials_configured": configured})
+            self._send(200, {"ok": True, "dataset": DATASET_ID, "variables": VARIABLES, "credentials_configured": configured})
             return
         self._send(404, {"error": "Not found"})
 
@@ -169,7 +201,7 @@ class handler(BaseHTTPRequestHandler):
                     results[futures[future]] = future.result()
 
             failures = [r for r in results if not r or not math.isfinite(float(r.get("mean", float("nan"))))]
-            self._send(200, {"dataset": DATASET_ID, "variable": VARIABLE, "season": season if season is not None else "all", "points": results, "valid_points": len(results) - len(failures), "failed_points": len(failures)})
+            self._send(200, {"dataset": DATASET_ID, "variables": VARIABLES, "season": season if season is not None else "all", "points": results, "valid_points": len(results) - len(failures), "failed_points": len(failures)})
         except Exception as e:
             self._send(502, {"error": str(e)})
 

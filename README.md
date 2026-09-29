@@ -1,4 +1,4 @@
-# Wave Route Analyzer V3.6
+# Wave Route Analyzer V3.7
 
 Browser UI + Vercel Python Function + Copernicus Marine.
 
@@ -64,3 +64,17 @@ The code now uses `.month` for a `DatetimeIndex` and `.dt.month` for a pandas Se
 - Clicking/hovering an arrow shows heading, route distance, Mean Hs and P95 Hs.
 - Heading is included in the Copernicus diagnostic table and exported CSV.
 - Wave direction is not yet included; these arrows represent the vessel/route heading only.
+
+
+## V3.7 updates
+
+- Added Copernicus `VMDR` mean wave direction alongside `VHM0`.
+- `VMDR` is the direction waves come FROM, clockwise from True North.
+- Added orange wave arrows on the map. The orange arrow points in the propagation direction; the tooltip reports the wave direction FROM.
+- Added relative wave angle = wave-from direction minus vessel heading, normalized to -180°..+180°.
+  - 0° = head seas
+  - ±90° = beam seas
+  - ±180° = following seas
+- Added qualitative sea-state regime: Head seas, Bow quartering, Beam seas, Stern quartering, Following seas.
+- Added wave-direction observation count and direction fields to the diagnostic table and CSV export.
+- Seasonal filtering is applied consistently to VHM0 and VMDR.
