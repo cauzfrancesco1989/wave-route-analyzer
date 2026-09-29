@@ -1,4 +1,4 @@
-# Wave Route Analyzer V3.3
+# Wave Route Analyzer V3.4
 
 Browser UI + Vercel Python Function + Copernicus Marine.
 
@@ -39,3 +39,12 @@ Variable: `VHM0` (spectral significant wave height), 3-hourly.
 - The seasonal filter is applied to the 3-hourly Copernicus VHM0 observations before calculating statistics.
 - The historical period selector remains the outer time window; the season selector filters the months inside that window.
 - Vercel backend maximum route sample points increased from 24 to 100.
+
+
+## V3.4 fix
+
+The seasonal filter now handles both Copernicus Marine dataframe formats:
+- `time` exposed as a dataframe column;
+- `time` exposed as a DatetimeIndex.
+
+Season 1 = Dec/Jan/Feb, Season 2 = Mar/Apr/May, Season 3 = Jun/Jul/Aug, Season 4 = Sep/Oct/Nov.

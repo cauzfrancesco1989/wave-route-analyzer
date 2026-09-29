@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
 
 import copernicusmarine
+import pandas as pd
 
 DATASET_ID = "cmems_mod_glo_wav_my_0.2deg_PT3H-i"
 VARIABLE = "VHM0"
@@ -65,19 +66,25 @@ def summarize_point(lon, lat, start, end, season):
             }
             months = month_map[season]
             try:
-                idx = df.index
-                month_mask = [getattr(t, "month", None) in months for t in idx]
-                if any(month_mask):
-                    series = series.loc[month_mask]
+                # Copernicus Marine read_dataframe may expose time either
+                # as a DatetimeIndex or as a 'time' column. Handle both.
+                if "time" in df.columns:
+                    times = pd.to_datetime(df["time"], utc=True, errors="coerce")
+                else:
+                    times = pd.to_datetime(df.index, utc=True, errors="coerce")
+
+                month_mask = times.dt.month.isin(months).to_numpy()
+                if month_mask.any():
+                    series = series.iloc[month_mask]
                 else:
                     return {
                         "lon": lon, "lat": lat, "count": 0,
                         "error": f"No observations in selected season within the requested historical period (season {season})."
                     }
-            except Exception:
+            except Exception as exc:
                 return {
                     "lon": lon, "lat": lat, "count": 0,
-                    "error": "Could not apply the seasonal month filter to the Copernicus time index."
+                    "error": f"Could not apply the seasonal month filter: {type(exc).__name__}: {exc}"
                 }
 
         vals = []
@@ -96,6 +103,7 @@ def summarize_point(lon, lat, start, end, season):
             "lon": lon,
             "lat": lat,
             "count": len(vals),
+            "season_months": sorted(months) if season in (1, 2, 3, 4) else "all",
             "mean": sum(vals) / len(vals),
             "median": percentile(vals, 0.50),
             "max": max(vals),
