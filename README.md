@@ -1,4 +1,4 @@
-# Wave Route Analyzer V3.4
+# Wave Route Analyzer V3.6
 
 Browser UI + Vercel Python Function + Copernicus Marine.
 
@@ -48,3 +48,19 @@ The seasonal filter now handles both Copernicus Marine dataframe formats:
 - `time` exposed as a DatetimeIndex.
 
 Season 1 = Dec/Jan/Feb, Season 2 = Mar/Apr/May, Season 3 = Jun/Jul/Aug, Season 4 = Sep/Oct/Nov.
+
+
+## V3.5 fix
+
+Fixed the seasonal filter for Copernicus responses where the time coordinate is a pandas `DatetimeIndex`.
+The code now uses `.month` for a `DatetimeIndex` and `.dt.month` for a pandas Series.
+
+
+## V3.6 updates
+
+- Added vessel heading visualization at every sampled route point.
+- Heading is calculated from the local route geometry as a bearing clockwise from North (0° = North, 90° = East, 180° = South, 270° = West).
+- Small arrows are displayed on the map and can be enabled/disabled with the "Show vessel heading arrows on map" checkbox.
+- Clicking/hovering an arrow shows heading, route distance, Mean Hs and P95 Hs.
+- Heading is included in the Copernicus diagnostic table and exported CSV.
+- Wave direction is not yet included; these arrows represent the vessel/route heading only.
