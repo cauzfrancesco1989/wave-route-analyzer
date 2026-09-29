@@ -60,27 +60,43 @@ def summarize_point(lon, lat, start, end, season):
             }
             months, season_name = month_map[season]
             try:
-                # Prefer an explicit time column; otherwise use the index.
+                # Copernicus may expose time either as a normal column, a
+                # DatetimeIndex, or a MultiIndex level. Resolve that explicitly
+                # and NEVER silently continue without applying the month filter.
+                times = None
                 if "time" in df.columns:
-                    times = pd.to_datetime(df["time"], utc=True, errors="coerce")
+                    candidate = pd.to_datetime(df["time"], utc=True, errors="coerce")
+                    if candidate.notna().any():
+                        times = candidate
+
+                if times is None:
+                    idx = df.index
+                    if isinstance(idx, pd.MultiIndex) and "time" in idx.names:
+                        candidate = pd.to_datetime(idx.get_level_values("time"), utc=True, errors="coerce")
+                    else:
+                        candidate = pd.to_datetime(idx, utc=True, errors="coerce")
+                    if candidate.notna().any():
+                        times = pd.Series(candidate, index=df.index)
+
+                if times is None:
+                    raise ValueError("Could not identify a valid time coordinate in the Copernicus response.")
+
+                if isinstance(times, pd.Series):
                     month_mask = times.dt.month.isin(months)
-                    if not bool(month_mask.any()):
-                        # Fallback for providers returning an unusable time column.
-                        times = pd.to_datetime(df.index, utc=True, errors="coerce")
-                        month_mask = pd.Series(times.month.isin(months), index=df.index)
                 else:
-                    times = pd.to_datetime(df.index, utc=True, errors="coerce")
                     month_mask = pd.Series(times.month.isin(months), index=df.index)
 
-                # Filter the dataframe itself so VHM0 and VMDR remain perfectly aligned.
-                df = df.loc[month_mask.to_numpy() if hasattr(month_mask, "to_numpy") else month_mask]
-                if len(df) == 0:
+                selected_count = int(month_mask.sum())
+                if selected_count == 0:
                     return {
                         "lon": lon, "lat": lat, "count": 0, "raw_count": raw_count,
                         "season_count": 0, "season": season, "season_name": season_name,
                         "season_months": sorted(months),
                         "error": f"No observations in {season_name} within the requested historical period."
                     }
+
+                # Filter the dataframe itself so VHM0 and VMDR remain perfectly aligned.
+                df = df.loc[month_mask.to_numpy()]
             except Exception as exc:
                 return {
                     "lon": lon, "lat": lat, "count": 0, "raw_count": raw_count,
@@ -89,7 +105,7 @@ def summarize_point(lon, lat, start, end, season):
                     "error": f"Could not apply the seasonal month filter: {type(exc).__name__}: {exc}"
                 }
 
-        filtered_count = len(df)
+        filtered_count = len(df) if season in (1, 2, 3, 4) else len(df)
 
         if "VHM0" in df.columns:
             series = df["VHM0"].copy()

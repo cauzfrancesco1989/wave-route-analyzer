@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wave Route Analyzer V3.10</title>
+<title>Wave Route Analyzer V3.11</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -12,7 +12,7 @@
 *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--ink)}
 header{height:62px;background:#102a43;color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between}header h1{font-size:19px;margin:0}header span{font-size:12px;opacity:.75}
 .app{display:grid;grid-template-columns:minmax(280px,360px) 7px minmax(400px,1fr);height:calc(100vh - 62px)}
-aside{background:var(--panel);padding:15px;overflow:auto;border-right:1px solid var(--line)}#map{height:100%}.resizer{background:#d7dee5;cursor:col-resize;position:relative;z-index:20}.resizer::after{content:"";position:absolute;left:2px;top:50%;width:3px;height:52px;transform:translateY(-50%);border-radius:3px;background:#9aa9b5}.resizer:hover,.resizer.dragging{background:#b9c7d2}.header-logo{height:42px;min-width:118px;padding:4px 9px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center}.header-logo img{display:block;max-height:34px;max-width:112px;width:auto;height:auto}
+aside{background:var(--panel);padding:15px;overflow:auto;border-right:1px solid var(--line)}#map{height:100%}.leaflet-container.pick-mode{cursor:crosshair!important}.leaflet-container.pick-mode .leaflet-interactive{cursor:crosshair!important}.resizer{background:#d7dee5;cursor:col-resize;position:relative;z-index:20}.resizer::after{content:"";position:absolute;left:2px;top:50%;width:3px;height:52px;transform:translateY(-50%);border-radius:3px;background:#9aa9b5}.resizer:hover,.resizer.dragging{background:#b9c7d2}.header-logo{height:42px;min-width:118px;padding:4px 9px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center}.header-logo img{display:block;max-height:34px;max-width:112px;width:auto;height:auto}
 label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,select,button{width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:6px;background:white;font:inherit}button{border:0;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-top:10px}button.secondary{background:#52616b}button.ghost{background:#fff;color:var(--accent);border:1px solid #9bbbd5}button.active{outline:2px solid #f59e0b;outline-offset:1px}button:disabled{opacity:.45;cursor:not-allowed}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.card{margin-top:13px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#fafbfc}.metric{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #edf0f2;font-size:12px}.metric:last-child{border:0}
 #status{font-size:11px;line-height:1.4;margin-top:10px;color:var(--muted)}.chartbox{height:250px;margin-top:8px}.small{font-size:10px;color:var(--muted);line-height:1.35}
@@ -31,26 +31,18 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
 </style>
 </head>
 <body>
-<header><div><h1>Wave Route Analyzer — V3.10</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></header>
+<header><div><h1>Wave Route Analyzer — V3.12</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></header>
 <div class="app">
 <aside id="sidebar">
-  <label>Origin</label>
-  <div class="grid2"><input id="olat" type="number" step=".0001" placeholder="Latitude" value="51.9244"><input id="olon" type="number" step=".0001" placeholder="Longitude" value="4.4777"></div>
-  <label>Destination</label>
-  <div class="grid2"><input id="dlat" type="number" step=".0001" placeholder="Latitude" value="1.3521"><input id="dlon" type="number" step=".0001" placeholder="Longitude" value="103.8198"></div>
-
-  <label>Intermediate waypoints (up to 3)</label>
-  <div class="waypoint" id="wp1"><b>Waypoint 1</b><div class="grid2"><input id="wp1lat" type="number" step=".0001" placeholder="Latitude"><input id="wp1lon" type="number" step=".0001" placeholder="Longitude"></div><button class="ghost wpPick" data-wp="1">Pick on map</button></div>
-  <div class="waypoint" id="wp2"><b>Waypoint 2</b><div class="grid2"><input id="wp2lat" type="number" step=".0001" placeholder="Latitude"><input id="wp2lon" type="number" step=".0001" placeholder="Longitude"></div><button class="ghost wpPick" data-wp="2">Pick on map</button></div>
-  <div class="waypoint" id="wp3"><b>Waypoint 3</b><div class="grid2"><input id="wp3lat" type="number" step=".0001" placeholder="Latitude"><input id="wp3lon" type="number" step=".0001" placeholder="Longitude"></div><button class="ghost wpPick" data-wp="3">Pick on map</button></div>
-  <div class="pickhelp">The route is calculated in sequence: Origin → Waypoint 1 → Waypoint 2 → Waypoint 3 → Destination. Empty waypoints are skipped.</div>
-
-  <label>Select points on map</label>
+  <label>Route points</label>
   <div class="maptools">
-    <button id="pickOrigin" class="ghost">Pick origin</button>
-    <button id="pickDestination" class="ghost">Pick destination</button>
+    <button id="pickOrigin" class="ghost">Pick origin on map</button>
+    <button id="pickDestination" class="ghost">Pick destination on map</button>
   </div>
-  <div id="pickhelp" class="pickhelp">Click a button, then click the desired location on the map.</div>
+  <div class="waypoint" id="wp1"><b>Waypoint 1</b><button class="ghost wpPick" data-wp="1">Pick on map</button></div>
+  <div class="waypoint" id="wp2"><b>Waypoint 2</b><button class="ghost wpPick" data-wp="2">Pick on map</button></div>
+  <div class="waypoint" id="wp3"><b>Waypoint 3</b><button class="ghost wpPick" data-wp="3">Pick on map</button></div>
+  <div id="pickhelp" class="pickhelp">Select Origin, up to 3 intermediate waypoints, then Destination directly on the map.</div>
 
   <label>Route restrictions</label>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:5px">
@@ -76,7 +68,7 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
   <label style="font-weight:500;margin-top:8px"><input id="showHeading" type="checkbox" checked style="width:auto"> Show vessel heading on map</label>
   <div class="pickhelp">Small boat symbol points in the vessel course direction. Click a boat to inspect the historical wave-direction distribution.</div>
   <label>Season filter</label>
-  <div class="small" style="margin:-1px 0 5px">The selected period is preserved in full; the filter keeps only the same three months in every year of that period.</div>
+  <div class="small" style="margin:-1px 0 5px">The full selected historical period is analysed; the filter keeps only the selected three calendar months in every year of that period.</div>
   <select id="season">
     <option value="all" selected>All seasons</option>
     <option value="1">Season 1 — Dec / Jan / Feb</option>
@@ -127,6 +119,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'�
 initSplitter();
 
 let routeLayer=null, originMarker=null, destinationMarker=null, waypointMarkers=[], headingLayer=null, routeCoords=[], chart=null, roseChart=null, lastRows=[];
+let originPoint=[51.9244,4.4777], destinationPoint=[1.3521,103.8198], waypointPoints=[null,null,null];
 let splitterDragging=false;
 let pickMode=null;
 const $=id=>document.getElementById(id);
@@ -206,11 +199,11 @@ function openRose(r,index){
 $('roseClose').onclick=()=>{$('roseModal').classList.remove('open');destroyRose();};
 $('roseModal').addEventListener('click',e=>{if(e.target===$('roseModal')){$('roseModal').classList.remove('open');destroyRose();}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('roseModal').classList.remove('open');destroyRose();}});
-function setOrigin(p){$('olat').value=Number(p[0]).toFixed(5);$('olon').value=Number(p[1]).toFixed(5);updateMarker('origin');invalidateRoute('Origin updated. Calculate the maritime route again.');}
-function setDest(p){$('dlat').value=Number(p[0]).toFixed(5);$('dlon').value=Number(p[1]).toFixed(5);updateMarker('destination');invalidateRoute('Destination updated. Calculate the maritime route again.');}
-function setWaypoint(i,p){$('wp'+i+'lat').value=Number(p[0]).toFixed(5);$('wp'+i+'lon').value=Number(p[1]).toFixed(5);updateWaypointMarker(i);invalidateRoute(`Waypoint ${i} updated. Calculate the maritime route again.`);}
-function waypointPoint(i){const lat=Number($('wp'+i+'lat').value),lon=Number($('wp'+i+'lon').value);if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;return [lat,lon];}
-function clearWaypointMarkers(){waypointMarkers.forEach(m=>map.removeLayer(m));waypointMarkers=[];}
+function setOrigin(p){originPoint=[Number(p[0]),Number(p[1])];updateMarker('origin');invalidateRoute('Origin updated. Calculate the maritime route again.');}
+function setDest(p){destinationPoint=[Number(p[0]),Number(p[1])];updateMarker('destination');invalidateRoute('Destination updated. Calculate the maritime route again.');}
+function setWaypoint(i,p){waypointPoints[i-1]=[Number(p[0]),Number(p[1])];updateWaypointMarker(i);invalidateRoute(`Waypoint ${i} updated. Calculate the maritime route again.`);}
+function waypointPoint(i){return waypointPoints[i-1] || null;}
+function clearWaypointMarkers(){waypointMarkers.forEach(m=>{if(m)map.removeLayer(m)});waypointMarkers=[];}
 function updateWaypointMarker(i){
   const old=waypointMarkers[i-1];if(old){map.removeLayer(old);waypointMarkers[i-1]=null;}
   const p=waypointPoint(i);if(!p)return;
@@ -220,17 +213,13 @@ function updateWaypointMarker(i){
 }
 function updateMarker(which){
   if(which==='origin'){
-    const p=[Number($('olat').value),Number($('olon').value)];
-    if(!Number.isFinite(p[0])||!Number.isFinite(p[1]))return;
     if(originMarker)map.removeLayer(originMarker);
-    originMarker=L.marker(p,{draggable:true}).addTo(map).bindTooltip('Origin');
-    originMarker.on('dragend',e=>{const q=e.target.getLatLng();setOrigin([q.lat,q.lng]);invalidateRoute('Origin moved. Calculate the maritime route again.');});
+    originMarker=L.marker(originPoint,{draggable:true}).addTo(map).bindTooltip('Origin');
+    originMarker.on('dragend',e=>{const q=e.target.getLatLng();setOrigin([q.lat,q.lng]);});
   }else{
-    const p=[Number($('dlat').value),Number($('dlon').value)];
-    if(!Number.isFinite(p[0])||!Number.isFinite(p[1]))return;
     if(destinationMarker)map.removeLayer(destinationMarker);
-    destinationMarker=L.marker(p,{draggable:true}).addTo(map).bindTooltip('Destination');
-    destinationMarker.on('dragend',e=>{const q=e.target.getLatLng();setDest([q.lat,q.lng]);invalidateRoute('Destination moved. Calculate the maritime route again.');});
+    destinationMarker=L.marker(destinationPoint,{draggable:true}).addTo(map).bindTooltip('Destination');
+    destinationMarker.on('dragend',e=>{const q=e.target.getLatLng();setDest([q.lat,q.lng]);});
   }
 }
 function invalidateRoute(msg){
@@ -247,7 +236,8 @@ function activatePick(mode){
   $('pickOrigin').classList.toggle('active',mode==='origin');
   $('pickDestination').classList.toggle('active',mode==='destination');
   document.querySelectorAll('.wpPick').forEach(b=>b.classList.toggle('active',mode===`waypoint${b.dataset.wp}`));
-  $('pickhelp').textContent=mode==='origin'?'Now click the origin location on the map.':mode==='destination'?'Now click the destination location on the map.':mode?.startsWith('waypoint')?`Now click the location for ${mode.replace('waypoint','Waypoint ')}.`:'Click a button, then click the desired location on the map.';
+  map.getContainer().classList.toggle('pick-mode',!!mode);
+  $('pickhelp').textContent=mode==='origin'?'Now click the origin location on the map.':mode==='destination'?'Now click the destination location on the map.':mode?.startsWith('waypoint')?`Now click the location for ${mode.replace('waypoint','Waypoint ')}.`:'Select a route-point button, then click the map.';
 }
 $('pickOrigin').onclick=()=>activatePick('origin');
 $('pickDestination').onclick=()=>activatePick('destination');
@@ -261,19 +251,11 @@ map.on('click',e=>{
   activatePick(null);
 });
 
-$('olat').addEventListener('change',()=>{updateMarker('origin');invalidateRoute('Origin changed. Calculate the maritime route again.');});
-$('olon').addEventListener('change',()=>{updateMarker('origin');invalidateRoute('Origin changed. Calculate the maritime route again.');});
-$('dlat').addEventListener('change',()=>{updateMarker('destination');invalidateRoute('Destination changed. Calculate the maritime route again.');});
-$('dlon').addEventListener('change',()=>{updateMarker('destination');invalidateRoute('Destination changed. Calculate the maritime route again.');});
-for(let i=1;i<=3;i++){
-  $(`wp${i}lat`).addEventListener('change',()=>{updateWaypointMarker(i);invalidateRoute(`Waypoint ${i} changed. Calculate the maritime route again.`);});
-  $(`wp${i}lon`).addEventListener('change',()=>{updateWaypointMarker(i);invalidateRoute(`Waypoint ${i} changed. Calculate the maritime route again.`);});
-}
 updateMarker('origin');updateMarker('destination');for(let i=1;i<=3;i++)updateWaypointMarker(i);
 
 async function getRoute(){
-  const startPoint=[Number($('olat').value),Number($('olon').value)];
-  const endPoint=[Number($('dlat').value),Number($('dlon').value)];
+  const startPoint=originPoint;
+  const endPoint=destinationPoint;
   const waypoints=[];
   for(let i=1;i<=3;i++){const p=waypointPoint(i);if(p)waypoints.push({i,p});}
   const sequence=[{name:'Origin',p:startPoint},...waypoints.map(x=>({name:`Waypoint ${x.i}`,p:x.p})),{name:'Destination',p:endPoint}];
@@ -397,7 +379,7 @@ $('waves').onclick=async()=>{
   }catch(e){console.error(e);status(e.message||'Historical Hs calculation failed.',true);}finally{$('waves').disabled=false;}
 };
 function draw(rows){if(chart)chart.destroy();chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>kmToNm(r.distanceKm).toFixed(0)),datasets:[{label:'Mean Hs',data:rows.map(r=>r.mean),borderWidth:2,pointRadius:2,tension:.15},{label:'P95 Hs',data:rows.map(r=>r.p95),borderWidth:1,pointRadius:1,borderDash:[5,5],tension:.15}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance (NM)'}},y:{title:{display:true,text:'Hs (m)'},beginAtZero:true}}}});}
-$('csv').onclick=()=>{const head='lon,lat,distance_nm,heading_deg,wave_mean_from_deg,relative_wave_angle_deg,sea_state,observations,wave_direction_observations,wave_direction_bins_N_to_NNW,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.heading,r.waveFrom,r.relativeAngle,r.seaState,r.count,r.waveCount,`\"${(r.waveBins||[]).join('|')}\"`,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_10.csv';a.click();};
+$('csv').onclick=()=>{const head='lon,lat,distance_nm,heading_deg,wave_mean_from_deg,relative_wave_angle_deg,sea_state,observations,wave_direction_observations,wave_direction_bins_N_to_NNW,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.heading,r.waveFrom,r.relativeAngle,r.seaState,r.count,r.waveCount,`\"${(r.waveBins||[]).join('|')}\"`,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_11.csv';a.click();};
 </script>
 </body>
 </html>
