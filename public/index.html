@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wave Route Analyzer V3.11</title>
+<title>Wave Route Analyzer V3.14</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -85,11 +85,11 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
     <div class="metric"><span>Route points</span><span id="npts">—</span></div><div class="metric"><span>Restrictions</span><span id="restrictions">None</span></div>
   </div>
   <div class="card"><b>Hs statistics along sampled route</b>
-    <div class="metric"><span>Mean Hs</span><span id="mean">—</span></div>
-    <div class="metric"><span>Median Hs</span><span id="median">—</span></div>
-    <div class="metric"><span>Maximum Hs</span><span id="max">—</span></div>
-    <div class="metric"><span>P95 Hs</span><span id="p95">—</span></div>
-    <div class="metric"><span>P99 Hs</span><span id="p99">—</span></div>
+    <div class="metric"><span title="Media aritmetica di tutti i valori di significant wave height (Hs) considerati nel periodo e nei mesi selezionati.">Mean Hs ⓘ</span><span id="mean">—</span></div>
+    <div class="metric"><span title="Valore di Hs che divide le osservazioni in due metà: il 50% dei valori è inferiore e il 50% superiore.">Median Hs ⓘ</span><span id="median">—</span></div>
+    <div class="metric"><span title="Il valore massimo di Hs osservato nell'insieme di dati considerato.">Maximum Hs ⓘ</span><span id="max">—</span></div>
+    <div class="metric"><span title="95° percentile di Hs: il 95% delle osservazioni è uguale o inferiore a questo valore, mentre il 5% è superiore.">P95 Hs ⓘ</span><span id="p95">—</span></div>
+    <div class="metric"><span title="99° percentile di Hs: il 99% delle osservazioni è uguale o inferiore a questo valore, mentre l'1% è superiore.">P99 Hs ⓘ</span><span id="p99">—</span></div>
   </div>
   <div class="card"><b>Hs along route</b><div class="chartbox"><canvas id="chart"></canvas></div></div>
   <details class="card"><summary><b>Copernicus diagnostic</b></summary><div id="debug" class="debug">No wave request yet.</div></details>
