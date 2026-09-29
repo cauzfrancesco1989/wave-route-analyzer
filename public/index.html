@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wave Route Analyzer — Browser V1</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#eef2f5;--panel:#fff;--ink:#17202a;--muted:#667085;--line:#d9e0e6;--accent:#1769aa}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{height:62px;background:#102a43;color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between}
+header h1{font-size:19px;margin:0}header span{font-size:12px;opacity:.75}
+.app{display:grid;grid-template-columns:330px 1fr;height:calc(100vh - 62px)}
+aside{background:var(--panel);padding:15px;overflow:auto;border-right:1px solid var(--line)}
+#map{height:100%}
+label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}
+input,select,button{width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:6px;background:white;font:inherit}
+button{border:0;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-top:10px}
+button.secondary{background:#52616b}button:disabled{opacity:.45;cursor:not-allowed}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.card{margin-top:13px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#fafbfc}
+.metric{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #edf0f2;font-size:12px}.metric:last-child{border:0}
+#status{font-size:11px;line-height:1.4;margin-top:10px;color:var(--muted)}
+.chartbox{height:250px;margin-top:8px}.small{font-size:10px;color:var(--muted);line-height:1.35}
+@media(max-width:850px){.app{grid-template-columns:1fr;height:auto}#map{height:55vh}aside{order:2}}
+</style>
+</head>
+<body>
+<header><h1>Wave Route Analyzer — Browser V1</h1><span>Copernicus Marine · VHM0</span></header>
+<div class="app">
+<aside>
+  <label>Origin</label>
+  <div class="grid2"><input id="olat" type="number" step=".0001" placeholder="Latitude" value="51.9244"><input id="olon" type="number" step=".0001" placeholder="Longitude" value="4.4777"></div>
+  <label>Destination</label>
+  <div class="grid2"><input id="dlat" type="number" step=".0001" placeholder="Latitude" value="1.3521"><input id="dlon" type="number" step=".0001" placeholder="Longitude" value="103.8198"></div>
+  <label>Route restrictions</label>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:5px">
+    <label style="font-weight:500;margin:0"><input id="avoidSuez" type="checkbox" style="width:auto"> Avoid Suez</label>
+    <label style="font-weight:500;margin:0"><input id="avoidPanama" type="checkbox" style="width:auto"> Avoid Panama</label>
+  </div>
+  <button id="route">Calculate maritime route</button>
+
+  <label>Historical period</label>
+  <select id="period">
+    <option value="3m">Last 3 months</option><option value="6m">Last 6 months</option>
+    <option value="1y">Previous year</option><option value="5y">Last 5 years</option>
+    <option value="10y">Last 10 years</option><option value="20y">Last 20 years</option>
+  </select>
+  <label>Sample spacing</label>
+  <select id="spacing"><option value="100">54 NM</option><option value="200">108 NM</option><option value="300">162 NM</option></select>
+  <button id="waves" disabled>Calculate historical Hs</button>
+  <button id="csv" class="secondary" disabled>Export CSV</button>
+  <div id="status">Click two points on the map or enter coordinates.</div>
+
+  <div class="card"><b>Route</b>
+    <div class="metric"><span>Distance</span><span id="dist">—</span></div>
+    <div class="metric"><span>Route points</span><span id="npts">—</span></div><div class="metric"><span>Restrictions</span><span id="restrictions">None</span></div>
+  </div>
+  <div class="card"><b>Hs statistics</b>
+    <div class="metric"><span>Mean</span><span id="mean">—</span></div>
+    <div class="metric"><span>Median</span><span id="median">—</span></div>
+    <div class="metric"><span>Maximum</span><span id="max">—</span></div>
+    <div class="metric"><span>P95</span><span id="p95">—</span></div>
+    <div class="metric"><span>P99</span><span id="p99">—</span></div>
+  </div>
+  <div class="card"><b>Hs along route</b><div class="chartbox"><canvas id="chart"></canvas></div></div>
+  <p class="small"><b>Routing:</b> searoute-ts / Eurostat 2025 MARNET maritime network. <b>Wave data:</b> NOAA/PacIOOS WaveWatch III Global via ERDDAP, variable <b>Thgt</b> (significant wave height), 0.5° grid. This is a research/planning tool, not certified navigation.</p>
+</aside>
+<div id="map"></div>
+</div>
+
+<script>
+const map=L.map('map').setView([35,20],3);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map);
+
+let routeLayer=null, markers=[], routeCoords=[], chart=null, lastRows=[];
+let nextMapPoint='origin';
+const $=id=>document.getElementById(id);
+function kmToNm(km){return Number(km)*0.539956803;}
+function status(s,err=false){$('status').textContent=s;$('status').style.color=err?'#b42318':'#667085'}
+function hav(a,b){const R=6371.0088,p=Math.PI/180;const dlat=(b[1]-a[1])*p,dlon=(b[0]-a[0])*p;const x=Math.sin(dlat/2)**2+Math.cos(a[1]*p)*Math.cos(b[1]*p)*Math.sin(dlon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+function setOrigin(p){$('olat').value=p[0].toFixed(5);$('olon').value=p[1].toFixed(5)}
+function setDest(p){$('dlat').value=p[0].toFixed(5);$('dlon').value=p[1].toFixed(5)}
+
+map.on('click',e=>{
+  const p=[e.latlng.lat,e.latlng.lng];
+  if(nextMapPoint==='origin'){
+    setOrigin(p);
+    nextMapPoint='destination';
+    status('Origin selected. Click the destination.');
+  }else{
+    setDest(p);
+    nextMapPoint='origin';
+    status('Destination selected. Click Calculate maritime route.');
+  }
+});
+
+async function getRoute(){
+  const olon=Number($('olon').value), olat=Number($('olat').value);
+  const dlon=Number($('dlon').value), dlat=Number($('dlat').value);
+
+  if(!Number.isFinite(olon)||!Number.isFinite(olat)||
+     !Number.isFinite(dlon)||!Number.isFinite(dlat)){
+    throw new Error('Please enter valid latitude/longitude coordinates.');
+  }
+
+  status('Loading maritime routing network...');
+
+  let seaRoute;
+  let routeEngine='';
+
+  // Try several browser-compatible ESM delivery paths. This matters when the
+  // HTML is opened directly as a local file (file://), where one CDN can be
+  // blocked while another works.
+  const moduleUrls=[
+    'https://cdn.jsdelivr.net/npm/searoute-ts@2.3.0/+esm',
+    'https://unpkg.com/searoute-ts@2.3.0/dist/esm/index.js',
+    'https://esm.sh/searoute-ts@2.3.0'
+  ];
+
+  let lastImportError=null;
+  for(const url of moduleUrls){
+    try{
+      const mod=await import(url);
+      if(typeof mod.seaRoute==='function'){
+        seaRoute=mod.seaRoute;
+        routeEngine=url;
+        break;
+      }
+      lastImportError=new Error('Module loaded but seaRoute export was not found.');
+    }catch(e){
+      lastImportError=e;
+    }
+  }
+
+  if(typeof seaRoute!=='function'){
+    const detail=lastImportError?.message ? ` (${lastImportError.message})` : '';
+    throw new Error(
+      'Could not load the maritime routing engine.'+
+      detail+
+      ' Open this HTML in Chrome/Edge/Firefox with internet access and reload it.'
+    );
+  }
+
+  const restrictions=[];
+  if($('avoidSuez')?.checked) restrictions.push('suez');
+  if($('avoidPanama')?.checked) restrictions.push('panama');
+
+  status(
+    'Routing engine loaded. Calculating maritime route' +
+    (restrictions.length ? ` (avoiding ${restrictions.join(' + ')})...` : '...')
+  );
+
+  let result;
+  try{
+    result=seaRoute([olon,olat],[dlon,dlat],{
+      units:'kilometers',
+      // No speed input is needed for route geometry.
+      appendOriginDestination:true,
+      returnPassages:true,
+      maxSnapDistanceKm:250,
+      antimeridian:'split',
+      allowArctic:false,
+      restrictions
+    });
+  }catch(e){
+    throw new Error(e?.message || 'No maritime route could be calculated.');
+  }
+
+  if(!result || !result.geometry){
+    throw new Error('No maritime route was found between the selected points.');
+  }
+
+  // searoute can return either LineString or MultiLineString
+  // (the latter is used when the route crosses the antimeridian).
+  let geometry=result.geometry;
+  let coordinates;
+
+  if(geometry.type==='LineString'){
+    coordinates=geometry.coordinates;
+  }else if(geometry.type==='MultiLineString'){
+    // Leaflet can display a MultiLineString directly. Keep all segments.
+    coordinates=geometry.coordinates;
+  }else{
+    throw new Error('Unsupported route geometry returned by the routing engine.');
+  }
+
+  return {
+    geometry,
+    coordinates,
+    distanceKm:Number(result.properties?.length || 0),
+    snapOriginKm:Number(result.properties?.originSnapKm || 0),
+    snapDestinationKm:Number(result.properties?.destinationSnapKm || 0),
+    totalDistanceKm:
+      Number(result.properties?.length || 0)+
+      Number(result.properties?.originSnapKm || 0)+
+      Number(result.properties?.destinationSnapKm || 0),
+    routeEngine,
+    passages:result.properties?.passages || [],
+    restrictions
+  };
+}
+
+$('route').onclick=async()=>{
+  $('route').disabled=true;
+  $('waves').disabled=true;
+  status('Starting maritime route calculation...');
+
+  try{
+    const r=await getRoute();
+    routeCoords=r.coordinates;
+
+    if(routeLayer)map.removeLayer(routeLayer);
+    markers.forEach(x=>map.removeLayer(x));
+    markers=[];
+
+    routeLayer=L.geoJSON(
+      {type:'Feature',geometry:r.geometry},
+      {style:{weight:4}}
+    ).addTo(map);
+
+    map.fitBounds(routeLayer.getBounds(),{padding:[20,20]});
+
+    markers.push(
+      L.marker([+$('olat').value,+$('olon').value])
+       .addTo(map).bindTooltip('Origin')
+    );
+    markers.push(
+      L.marker([+$('dlat').value,+$('dlon').value])
+       .addTo(map).bindTooltip('Destination')
+    );
+
+    $('dist').textContent=kmToNm(r.totalDistanceKm).toFixed(0)+' NM';
+    $('npts').textContent=
+      r.geometry.type==='MultiLineString'
+      ? r.geometry.coordinates.reduce((n,x)=>n+x.length,0)
+      : r.geometry.coordinates.length;
+
+    if($('restrictions')){
+      $('restrictions').textContent=
+        r.restrictions.length ? r.restrictions.join(', ') : 'None';
+    }
+
+    const passageText=r.passages.length
+      ? ` Passages: ${r.passages.join(', ')}.`
+      : '';
+
+    status(
+      `Maritime route calculated successfully. `+
+      `${kmToNm(r.totalDistanceKm).toFixed(0)} NM total. `+
+      `Origin snap ${r.snapOriginKm.toFixed(1)} km; `+
+      `destination snap ${r.snapDestinationKm.toFixed(1)} km. `+
+      `Engine: ${r.routeEngine}.`+
+      (r.restrictions.length
+        ? ` Avoided: ${r.restrictions.join(', ')}.`
+        : '')+
+      passageText
+    );
+
+    $('waves').disabled=false;
+    nextMapPoint='origin';
+
+  }catch(e){
+    console.error(e);
+    status(e.message || 'Route calculation failed.',true);
+  }finally{
+    $('route').disabled=false;
+  }
+};
+
+function sampleLine(coords,spacingKm){
+  // Normalize LineString / MultiLineString into a continuous list.
+  const segments=(coords.length && Array.isArray(coords[0][0]))
+    ? coords
+    : [coords];
+
+  const out=[],dist=[];
+  let cumulative=0;
+
+  for(const segment of segments){
+    if(!segment || segment.length<2) continue;
+    if(out.length===0){
+      out.push(segment[0]);
+      dist.push(cumulative);
+    }
+
+    for(let k=0;k<segment.length-1;k++){
+      const a=segment[k],b=segment[k+1];
+      const seg=hav(a,b);
+      const n=Math.max(1,Math.ceil(seg/spacingKm));
+
+      for(let i=1;i<=n;i++){
+        const f=i/n;
+        const point=[
+          a[0]+f*(b[0]-a[0]),
+          a[1]+f*(b[1]-a[1])
+        ];
+        out.push(point);
+        dist.push(cumulative+seg*f);
+      }
+      cumulative+=seg;
+    }
+  }
+
+  return {points:out,dist};
+}
+
+/*
+ Browser-only demonstration data path:
+ We attempt the NOAA ERDDAP wave endpoint for a gridded global wave product.
+ The endpoint may change; if unavailable, the UI explains that a production
+ Copernicus proxy is required. This avoids putting Copernicus credentials in JS.
+*/
+async function fetchHs(lon,lat,start,end){
+  const r=await fetch('/api/hs',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      lon:Number(lon),
+      lat:Number(lat),
+      start:start.toISOString(),
+      end:end.toISOString()
+    })
+  });
+
+  const text=await r.text();
+  let j={};
+  try{j=JSON.parse(text)}catch(e){}
+
+  if(!r.ok){
+    throw new Error(j.error || `Wave API HTTP ${r.status}`);
+  }
+
+  return Array.isArray(j.samples)?j.samples:[];
+}
+function dates(period){
+  // Copernicus GLOBAL_MULTIYEAR_WAV_001_032 currently reports coverage
+  // from 1980-01-01 to 2026-05-31.
+  const DATA_START=new Date('1980-01-01T00:00:00Z');
+  const DATA_END=new Date('2026-05-31T21:00:00Z');
+
+  let end=new Date();
+  if(end>DATA_END) end=new Date(DATA_END);
+
+  const start=new Date(end);
+  const key=period.replace('m','').replace('y','');
+  const days={
+    3:90, 6:182, 1:365, 5:1826, 10:3652, 20:7305
+  }[key]||90;
+
+  start.setUTCDate(start.getUTCDate()-days);
+  if(start<DATA_START) start.setTime(DATA_START.getTime());
+
+  return {start,end};
+}
+function stat(a){
+  if(!a.length)return {};
+  a=[...a].sort((x,y)=>x-y);
+  const q=p=>a[Math.min(a.length-1,Math.floor(p*(a.length-1)))];
+  return {mean:a.reduce((x,y)=>x+y,0)/a.length,median:q(.5),max:a[a.length-1],p95:q(.95),p99:q(.99)};
+}
+
+$('waves').onclick=async()=>{
+  if(!routeCoords.length)return;
+  $('waves').disabled=true;$('csv').disabled=true;
+  status('Sampling the route and requesting historical wave data...');
+  try{
+    const sm=sampleLine(routeCoords,Number($('spacing').value));
+    const {start,end}=dates($('period').value);
+    const now=new Date();
+    if(now>end){
+      status('Historical wave dataset ends on 14 Sep 2026; using the latest available data.');
+    }
+    const rows=[];
+    const maxPoints=Math.min(sm.points.length,24);
+    for(let i=0;i<maxPoints;i++){
+      const idx=Math.round(i*(sm.points.length-1)/(maxPoints-1||1));
+      const p=sm.points[idx];
+      try{
+        const h=await fetchHs(p[0],p[1],start,end);
+        const ss=stat(h.map(x=>x.hs));
+        rows.push({
+          lon:p[0],
+          lat:p[1],
+          distanceKm:sm.dist[idx],
+          ...ss
+        });
+      }catch(e){
+        // Preserve the first real API error so the user gets a useful message.
+        if(!window.__waveApiError) window.__waveApiError=e;
+      }
+      status(`Wave extraction: ${i+1}/${maxPoints} route points`);
+    }
+    if(!rows.length){
+      throw new Error(window.__waveApiError?.message ||
+        'No historical wave values were returned by the Copernicus API.');
+    }
+    window.__waveApiError=null;
+    lastRows=rows;
+    const all=rows.map(r=>r.mean).filter(Number.isFinite);
+    const s=stat(all);
+    $('mean').textContent=Number.isFinite(s.mean)?s.mean.toFixed(2)+' m':'—';
+    $('median').textContent=Number.isFinite(s.median)?s.median.toFixed(2)+' m':'—';
+    $('max').textContent=Number.isFinite(s.max)?s.max.toFixed(2)+' m':'—';
+    $('p95').textContent=Number.isFinite(s.p95)?s.p95.toFixed(2)+' m':'—';
+    $('p99').textContent=Number.isFinite(s.p99)?s.p99.toFixed(2)+' m':'—';
+    draw(rows);$('csv').disabled=false;
+    status(`Completed ${rows.length} sampled points. Historical Hs from Copernicus Marine VHM0.`);
+  }catch(e){status(e.message,true)}finally{$('waves').disabled=false}
+};
+
+function draw(rows){
+  if(chart)chart.destroy();
+  chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>r.distanceKm.toFixed(0)),datasets:[
+    {label:'Mean Hs',data:rows.map(r=>r.mean),borderWidth:2,pointRadius:1,tension:.15},
+    {label:'P95 Hs',data:rows.map(r=>r.p95),borderWidth:1,pointRadius:0,borderDash:[5,5],tension:.15}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance (NM)'}},y:{title:{display:true,text:'Hs (m)'},beginAtZero:true}}}});
+}
+$('csv').onclick=()=>{
+  const head='lon,lat,distance_nm,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';
+  const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3.csv';a.click();
+};
+</script>
+</body>
+</html>
