@@ -140,9 +140,20 @@ def summarize_point(lon, lat, start, end, season):
             wave_from = math.degrees(math.atan2(sin_mean, cos_mean)) % 360.0
             result["wave_from_deg"] = wave_from
             result["wave_direction_count"] = len(wave_vals)
+
+            # Directional distribution of VMDR (direction waves come FROM).
+            # 16 compass sectors, 22.5° each, centered on N, NNE, NE, ... NNW.
+            # Return counts rather than all individual observations to keep the
+            # browser response compact while preserving the historical distribution.
+            bins = [0] * 16
+            for direction in wave_vals:
+                idx = int(((direction + 11.25) % 360.0) // 22.5)
+                bins[idx] += 1
+            result["wave_direction_bins"] = bins
         else:
             result["wave_from_deg"] = None
             result["wave_direction_count"] = 0
+            result["wave_direction_bins"] = [0] * 16
 
         return result
     except Exception as exc:

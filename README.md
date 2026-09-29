@@ -1,4 +1,4 @@
-# Wave Route Analyzer V3.7
+# Wave Route Analyzer V3.8
 
 Browser UI + Vercel Python Function + Copernicus Marine.
 
@@ -78,3 +78,14 @@ The code now uses `.month` for a `DatetimeIndex` and `.dt.month` for a pandas Se
 - Added qualitative sea-state regime: Head seas, Bow quartering, Beam seas, Stern quartering, Following seas.
 - Added wave-direction observation count and direction fields to the diagnostic table and CSV export.
 - Seasonal filtering is applied consistently to VHM0 and VMDR.
+
+
+## V3.8 updates
+
+- Replaced persistent orange wave-direction arrows with a historical wave-direction distribution (wind-rose style polar chart).
+- Added a small top-down boat symbol at each sampled route point, rotated to the local vessel heading.
+- Clicking a boat opens the directional rose for that point.
+- The rose uses the individual historical `VMDR` observations and 16 compass sectors of 22.5°.
+- The rose is explicitly based on wave direction **FROM** which the waves arrive, clockwise from True North.
+- The vessel heading is shown as a reference value; the panel also summarizes the distribution into head seas, bow quartering, beam seas, stern quartering and following seas.
+- CSV export now includes the 16 directional bin counts.
