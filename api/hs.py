@@ -44,6 +44,53 @@ def summarize_point(lon, lat, start, end, season):
         if df is None or len(df) == 0:
             return {"lon": lon, "lat": lat, "count": 0, "error": "Copernicus returned an empty dataframe."}
 
+        # Optional meteorological season filter. IMPORTANT: the requested
+        # historical interval is fetched first, then the same three UTC
+        # calendar months are retained in EVERY year of that interval.
+        # Example: 10 years + Season 1 means Dec/Jan/Feb for all 10 years.
+        raw_count = len(df)
+        season_name = "All seasons"
+        months = None
+        if season in (1, 2, 3, 4):
+            month_map = {
+                1: ({12, 1, 2}, "Season 1 — Dec / Jan / Feb"),
+                2: ({3, 4, 5}, "Season 2 — Mar / Apr / May"),
+                3: ({6, 7, 8}, "Season 3 — Jun / Jul / Aug"),
+                4: ({9, 10, 11}, "Season 4 — Sep / Oct / Nov"),
+            }
+            months, season_name = month_map[season]
+            try:
+                # Prefer an explicit time column; otherwise use the index.
+                if "time" in df.columns:
+                    times = pd.to_datetime(df["time"], utc=True, errors="coerce")
+                    month_mask = times.dt.month.isin(months)
+                    if not bool(month_mask.any()):
+                        # Fallback for providers returning an unusable time column.
+                        times = pd.to_datetime(df.index, utc=True, errors="coerce")
+                        month_mask = pd.Series(times.month.isin(months), index=df.index)
+                else:
+                    times = pd.to_datetime(df.index, utc=True, errors="coerce")
+                    month_mask = pd.Series(times.month.isin(months), index=df.index)
+
+                # Filter the dataframe itself so VHM0 and VMDR remain perfectly aligned.
+                df = df.loc[month_mask.to_numpy() if hasattr(month_mask, "to_numpy") else month_mask]
+                if len(df) == 0:
+                    return {
+                        "lon": lon, "lat": lat, "count": 0, "raw_count": raw_count,
+                        "season_count": 0, "season": season, "season_name": season_name,
+                        "season_months": sorted(months),
+                        "error": f"No observations in {season_name} within the requested historical period."
+                    }
+            except Exception as exc:
+                return {
+                    "lon": lon, "lat": lat, "count": 0, "raw_count": raw_count,
+                    "season_count": 0, "season": season, "season_name": season_name,
+                    "season_months": sorted(months),
+                    "error": f"Could not apply the seasonal month filter: {type(exc).__name__}: {exc}"
+                }
+
+        filtered_count = len(df)
+
         if "VHM0" in df.columns:
             series = df["VHM0"].copy()
         elif "value" in df.columns:
@@ -55,44 +102,6 @@ def summarize_point(lon, lat, start, end, season):
             series = df[numeric[0]].copy()
 
         wave_series = df["VMDR"].copy() if "VMDR" in df.columns else None
-
-        # Optional meteorological season filter:
-        # Season 1 = Dec/Jan/Feb, Season 2 = Mar/Apr/May,
-        # Season 3 = Jun/Jul/Aug, Season 4 = Sep/Oct/Nov.
-        if season in (1, 2, 3, 4):
-            month_map = {
-                1: {12, 1, 2},
-                2: {3, 4, 5},
-                3: {6, 7, 8},
-                4: {9, 10, 11},
-            }
-            months = month_map[season]
-            try:
-                # Copernicus Marine read_dataframe may expose time either
-                # as a DatetimeIndex or as a 'time' column. Handle both.
-                if "time" in df.columns:
-                    times = pd.to_datetime(df["time"], utc=True, errors="coerce")
-                    # pandas Series -> .dt accessor
-                    month_mask = times.dt.month.isin(months).to_numpy()
-                else:
-                    times = pd.to_datetime(df.index, utc=True, errors="coerce")
-                    # pandas DatetimeIndex -> use .month directly
-                    month_mask = times.month.isin(months).to_numpy()
-
-                if month_mask.any():
-                    series = series.iloc[month_mask]
-                    if wave_series is not None:
-                        wave_series = wave_series.iloc[month_mask]
-                else:
-                    return {
-                        "lon": lon, "lat": lat, "count": 0,
-                        "error": f"No observations in selected season within the requested historical period (season {season})."
-                    }
-            except Exception as exc:
-                return {
-                    "lon": lon, "lat": lat, "count": 0,
-                    "error": f"Could not apply the seasonal month filter: {type(exc).__name__}: {exc}"
-                }
 
         # Keep only finite Hs values. VMDR is kept aligned with the same rows.
         vals = []
@@ -123,6 +132,10 @@ def summarize_point(lon, lat, start, end, season):
             "lon": lon,
             "lat": lat,
             "count": len(vals),
+            "raw_count": raw_count,
+            "season_count": filtered_count,
+            "season": season if season in (1, 2, 3, 4) else "all",
+            "season_name": season_name,
             "season_months": sorted(months) if season in (1, 2, 3, 4) else "all",
             "mean": sum(vals) / len(vals),
             "median": percentile(vals, 0.50),
