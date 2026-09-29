@@ -1,4 +1,4 @@
-# Wave Route Analyzer V3 Web App
+# Wave Route Analyzer V3.1 Web App
 
 Browser UI + Vercel Python Function + Copernicus Marine.
 
@@ -43,3 +43,6 @@ The returned Hs statistics are based on the full 3-hourly series retrieved for e
 sampled route point. The frontend samples the maritime route spatially; it does not
 claim to resolve conditions between those route points. This is a weather/ocean
 climate analysis tool, not a certified navigation or operational weather service.
+
+
+V3.1 fixes the frontend/API response mapping and sends all sampled route points in a single request. The chart distance axis is displayed in nautical miles.

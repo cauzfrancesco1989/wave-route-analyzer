@@ -312,13 +312,12 @@ function sampleLine(coords,spacingKm){
  The endpoint may change; if unavailable, the UI explains that a production
  Copernicus proxy is required. This avoids putting Copernicus credentials in JS.
 */
-async function fetchHs(lon,lat,start,end){
+async function fetchHs(points,start,end){
   const r=await fetch('/api/hs',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
-      lon:Number(lon),
-      lat:Number(lat),
+      points:points.map(p=>({lon:Number(p.lon),lat:Number(p.lat)})),
       start:start.toISOString(),
       end:end.toISOString()
     })
@@ -332,7 +331,10 @@ async function fetchHs(lon,lat,start,end){
     throw new Error(j.error || `Wave API HTTP ${r.status}`);
   }
 
-  return Array.isArray(j.samples)?j.samples:[];
+  if(!Array.isArray(j.points)){
+    throw new Error('Copernicus API returned no point results.');
+  }
+  return j.points;
 }
 function dates(period){
   // Copernicus GLOBAL_MULTIYEAR_WAV_001_032 currently reports coverage
@@ -370,49 +372,67 @@ $('waves').onclick=async()=>{
     const {start,end}=dates($('period').value);
     const now=new Date();
     if(now>end){
-      status('Historical wave dataset ends on 14 Sep 2026; using the latest available data.');
+      status('Historical wave dataset ends on 31 May 2026; using the latest available data.');
     }
-    const rows=[];
+
     const maxPoints=Math.min(sm.points.length,24);
+    const selected=[];
     for(let i=0;i<maxPoints;i++){
       const idx=Math.round(i*(sm.points.length-1)/(maxPoints-1||1));
-      const p=sm.points[idx];
-      try{
-        const h=await fetchHs(p[0],p[1],start,end);
-        const ss=stat(h.map(x=>x.hs));
-        rows.push({
-          lon:p[0],
-          lat:p[1],
-          distanceKm:sm.dist[idx],
-          ...ss
-        });
-      }catch(e){
-        // Preserve the first real API error so the user gets a useful message.
-        if(!window.__waveApiError) window.__waveApiError=e;
+      selected.push({idx,lon:sm.points[idx][0],lat:sm.points[idx][1]});
+    }
+
+    const results=await fetchHs(selected,start,end);
+    const rows=[];
+    for(let i=0;i<selected.length;i++){
+      const p=selected[i];
+      const h=results[i];
+      if(!h || !Number.isFinite(Number(h.mean))){
+        throw new Error(`No historical wave values returned for route point ${i+1}.`);
       }
-      status(`Wave extraction: ${i+1}/${maxPoints} route points`);
+      rows.push({
+        lon:p.lon,
+        lat:p.lat,
+        distanceKm:sm.dist[p.idx],
+        mean:Number(h.mean),
+        median:Number(h.median),
+        max:Number(h.max),
+        p95:Number(h.p95),
+        p99:Number(h.p99)
+      });
+      status(`Wave extraction: ${i+1}/${selected.length} route points`);
     }
+
     if(!rows.length){
-      throw new Error(window.__waveApiError?.message ||
-        'No historical wave values were returned by the Copernicus API.');
+      throw new Error('No historical wave values were returned by the Copernicus API.');
     }
-    window.__waveApiError=null;
+
     lastRows=rows;
-    const all=rows.map(r=>r.mean).filter(Number.isFinite);
-    const s=stat(all);
-    $('mean').textContent=Number.isFinite(s.mean)?s.mean.toFixed(2)+' m':'—';
-    $('median').textContent=Number.isFinite(s.median)?s.median.toFixed(2)+' m':'—';
-    $('max').textContent=Number.isFinite(s.max)?s.max.toFixed(2)+' m':'—';
-    $('p95').textContent=Number.isFinite(s.p95)?s.p95.toFixed(2)+' m':'—';
-    $('p99').textContent=Number.isFinite(s.p99)?s.p99.toFixed(2)+' m':'—';
-    draw(rows);$('csv').disabled=false;
+    const allMean=rows.map(r=>r.mean).filter(Number.isFinite);
+    const allMedian=rows.map(r=>r.median).filter(Number.isFinite);
+    const allMax=rows.map(r=>r.max).filter(Number.isFinite);
+    const allP95=rows.map(r=>r.p95).filter(Number.isFinite);
+    const allP99=rows.map(r=>r.p99).filter(Number.isFinite);
+
+    $('mean').textContent=stat(allMean).mean.toFixed(2)+' m';
+    $('median').textContent=stat(allMedian).median.toFixed(2)+' m';
+    $('max').textContent=stat(allMax).max.toFixed(2)+' m';
+    $('p95').textContent=stat(allP95).p95.toFixed(2)+' m';
+    $('p99').textContent=stat(allP99).p99.toFixed(2)+' m';
+
+    draw(rows);
+    $('csv').disabled=false;
     status(`Completed ${rows.length} sampled points. Historical Hs from Copernicus Marine VHM0.`);
-  }catch(e){status(e.message,true)}finally{$('waves').disabled=false}
+  }catch(e){
+    status(e.message,true);
+  }finally{
+    $('waves').disabled=false;
+  }
 };
 
 function draw(rows){
   if(chart)chart.destroy();
-  chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>r.distanceKm.toFixed(0)),datasets:[
+  chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>kmToNm(r.distanceKm).toFixed(0)),datasets:[
     {label:'Mean Hs',data:rows.map(r=>r.mean),borderWidth:2,pointRadius:1,tension:.15},
     {label:'P95 Hs',data:rows.map(r=>r.p95),borderWidth:1,pointRadius:0,borderDash:[5,5],tension:.15}
   ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance (NM)'}},y:{title:{display:true,text:'Hs (m)'},beginAtZero:true}}}});
