@@ -31,7 +31,7 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
 </style>
 </head>
 <body>
-<header><div><h1>Wave Route Analyzer — V3.12</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></header>
+<header><div><h1>Wave Route Analyzer — V3.13</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></header>
 <div class="app">
 <aside id="sidebar">
   <label>Route points</label>
@@ -116,13 +116,13 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
 <script>
 const map=L.map('map').setView([35,20],3);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map);
-initSplitter();
 
 let routeLayer=null, originMarker=null, destinationMarker=null, waypointMarkers=[], headingLayer=null, routeCoords=[], chart=null, roseChart=null, lastRows=[];
 let originPoint=[51.9244,4.4777], destinationPoint=[1.3521,103.8198], waypointPoints=[null,null,null];
 let splitterDragging=false;
 let pickMode=null;
 const $=id=>document.getElementById(id);
+initSplitter();
 function kmToNm(km){return Number(km)*0.539956803;}
 function status(s,err=false){$('status').textContent=s;$('status').style.color=err?'#b42318':'#667085';}
 function initSplitter(){
@@ -379,7 +379,7 @@ $('waves').onclick=async()=>{
   }catch(e){console.error(e);status(e.message||'Historical Hs calculation failed.',true);}finally{$('waves').disabled=false;}
 };
 function draw(rows){if(chart)chart.destroy();chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>kmToNm(r.distanceKm).toFixed(0)),datasets:[{label:'Mean Hs',data:rows.map(r=>r.mean),borderWidth:2,pointRadius:2,tension:.15},{label:'P95 Hs',data:rows.map(r=>r.p95),borderWidth:1,pointRadius:1,borderDash:[5,5],tension:.15}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance (NM)'}},y:{title:{display:true,text:'Hs (m)'},beginAtZero:true}}}});}
-$('csv').onclick=()=>{const head='lon,lat,distance_nm,heading_deg,wave_mean_from_deg,relative_wave_angle_deg,sea_state,observations,wave_direction_observations,wave_direction_bins_N_to_NNW,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.heading,r.waveFrom,r.relativeAngle,r.seaState,r.count,r.waveCount,`\"${(r.waveBins||[]).join('|')}\"`,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_11.csv';a.click();};
+$('csv').onclick=()=>{const head='lon,lat,distance_nm,heading_deg,wave_mean_from_deg,relative_wave_angle_deg,sea_state,observations,wave_direction_observations,wave_direction_bins_N_to_NNW,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.heading,r.waveFrom,r.relativeAngle,r.seaState,r.count,r.waveCount,`\"${(r.waveBins||[]).join('|')}\"`,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_13.csv';a.click();};
 </script>
 </body>
 </html>
