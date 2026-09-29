@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wave Route Analyzer V3.8</title>
+<title>Wave Route Analyzer V3.9</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -16,7 +16,7 @@ aside{background:var(--panel);padding:15px;overflow:auto;border-right:1px solid 
 label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,select,button{width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:6px;background:white;font:inherit}button{border:0;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-top:10px}button.secondary{background:#52616b}button.ghost{background:#fff;color:var(--accent);border:1px solid #9bbbd5}button.active{outline:2px solid #f59e0b;outline-offset:1px}button:disabled{opacity:.45;cursor:not-allowed}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.card{margin-top:13px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#fafbfc}.metric{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #edf0f2;font-size:12px}.metric:last-child{border:0}
 #status{font-size:11px;line-height:1.4;margin-top:10px;color:var(--muted)}.chartbox{height:250px;margin-top:8px}.small{font-size:10px;color:var(--muted);line-height:1.35}
-.maptools{display:grid;grid-template-columns:1fr 1fr;gap:6px}.maptools button{margin-top:0}.pickhelp{font-size:10px;color:var(--muted);margin-top:6px}.debug{font-size:10px;max-height:220px;overflow:auto;margin-top:7px;background:#fff;border:1px solid #e6e9ec;border-radius:6px;padding:7px}.debug table{width:100%;border-collapse:collapse}.debug th,.debug td{padding:3px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}.debug th:first-child,.debug td:first-child{text-align:left}
+.maptools{display:grid;grid-template-columns:1fr 1fr;gap:6px}.waypoint{margin-top:7px;padding:8px;border:1px solid #e4e8ec;border-radius:7px;background:#fafbfc}.waypoint b{font-size:11px}.waypoint button{margin-top:6px}.maptools button{margin-top:0}.pickhelp{font-size:10px;color:var(--muted);margin-top:6px}.debug{font-size:10px;max-height:220px;overflow:auto;margin-top:7px;background:#fff;border:1px solid #e6e9ec;border-radius:6px;padding:7px}.debug table{width:100%;border-collapse:collapse}.debug th,.debug td{padding:3px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}.debug th:first-child,.debug td:first-child{text-align:left}
 .boat-icon{width:22px;height:42px;position:relative;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
 .boat-icon::before{content:"";position:absolute;left:4px;top:1px;width:14px;height:39px;background:#fff;border:2px solid #102a43;border-radius:50% 50% 32% 32% / 62% 62% 28% 28%;clip-path:polygon(50% 0%,100% 24%,88% 100%,12% 100%,0% 24%)}
 .boat-icon::after{content:"";position:absolute;left:9px;top:10px;width:4px;height:23px;background:#102a43;border-radius:2px;opacity:.9}
@@ -31,13 +31,19 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
 </style>
 </head>
 <body>
-<header><h1>Wave Route Analyzer — V3.8</h1><span>Copernicus Marine · VHM0 + VMDR</span></header>
+<header><h1>Wave Route Analyzer — V3.9</h1><span>Copernicus Marine · VHM0 + VMDR</span></header>
 <div class="app">
 <aside>
   <label>Origin</label>
   <div class="grid2"><input id="olat" type="number" step=".0001" placeholder="Latitude" value="51.9244"><input id="olon" type="number" step=".0001" placeholder="Longitude" value="4.4777"></div>
   <label>Destination</label>
   <div class="grid2"><input id="dlat" type="number" step=".0001" placeholder="Latitude" value="1.3521"><input id="dlon" type="number" step=".0001" placeholder="Longitude" value="103.8198"></div>
+
+  <label>Intermediate waypoints (up to 3)</label>
+  <div class="waypoint" id="wp1"><b>Waypoint 1</b><div class="grid2"><input id="wp1lat" type="number" step=".0001" placeholder="Latitude"><input id="wp1lon" type="number" step=".0001" placeholder="Longitude"></div><button class="ghost wpPick" data-wp="1">Pick on map</button></div>
+  <div class="waypoint" id="wp2"><b>Waypoint 2</b><div class="grid2"><input id="wp2lat" type="number" step=".0001" placeholder="Latitude"><input id="wp2lon" type="number" step=".0001" placeholder="Longitude"></div><button class="ghost wpPick" data-wp="2">Pick on map</button></div>
+  <div class="waypoint" id="wp3"><b>Waypoint 3</b><div class="grid2"><input id="wp3lat" type="number" step=".0001" placeholder="Latitude"><input id="wp3lon" type="number" step=".0001" placeholder="Longitude"></div><button class="ghost wpPick" data-wp="3">Pick on map</button></div>
+  <div class="pickhelp">The route is calculated in sequence: Origin → Waypoint 1 → Waypoint 2 → Waypoint 3 → Destination. Empty waypoints are skipped.</div>
 
   <label>Select points on map</label>
   <div class="maptools">
@@ -117,7 +123,7 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
 const map=L.map('map').setView([35,20],3);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map);
 
-let routeLayer=null, originMarker=null, destinationMarker=null, headingLayer=null, routeCoords=[], chart=null, roseChart=null, lastRows=[];
+let routeLayer=null, originMarker=null, destinationMarker=null, waypointMarkers=[], headingLayer=null, routeCoords=[], chart=null, roseChart=null, lastRows=[];
 let pickMode=null;
 const $=id=>document.getElementById(id);
 function kmToNm(km){return Number(km)*0.539956803;}
@@ -188,8 +194,18 @@ function openRose(r,index){
 $('roseClose').onclick=()=>{$('roseModal').classList.remove('open');destroyRose();};
 $('roseModal').addEventListener('click',e=>{if(e.target===$('roseModal')){$('roseModal').classList.remove('open');destroyRose();}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('roseModal').classList.remove('open');destroyRose();}});
-function setOrigin(p){$('olat').value=Number(p[0]).toFixed(5);$('olon').value=Number(p[1]).toFixed(5);updateMarker('origin');}
-function setDest(p){$('dlat').value=Number(p[0]).toFixed(5);$('dlon').value=Number(p[1]).toFixed(5);updateMarker('destination');}
+function setOrigin(p){$('olat').value=Number(p[0]).toFixed(5);$('olon').value=Number(p[1]).toFixed(5);updateMarker('origin');invalidateRoute('Origin updated. Calculate the maritime route again.');}
+function setDest(p){$('dlat').value=Number(p[0]).toFixed(5);$('dlon').value=Number(p[1]).toFixed(5);updateMarker('destination');invalidateRoute('Destination updated. Calculate the maritime route again.');}
+function setWaypoint(i,p){$('wp'+i+'lat').value=Number(p[0]).toFixed(5);$('wp'+i+'lon').value=Number(p[1]).toFixed(5);updateWaypointMarker(i);invalidateRoute(`Waypoint ${i} updated. Calculate the maritime route again.`);}
+function waypointPoint(i){const lat=Number($('wp'+i+'lat').value),lon=Number($('wp'+i+'lon').value);if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;return [lat,lon];}
+function clearWaypointMarkers(){waypointMarkers.forEach(m=>map.removeLayer(m));waypointMarkers=[];}
+function updateWaypointMarker(i){
+  const old=waypointMarkers[i-1];if(old){map.removeLayer(old);waypointMarkers[i-1]=null;}
+  const p=waypointPoint(i);if(!p)return;
+  const m=L.marker(p,{draggable:true}).addTo(map).bindTooltip(`Waypoint ${i}`);
+  m.on('dragend',e=>{const q=e.target.getLatLng();setWaypoint(i,[q.lat,q.lng]);});
+  waypointMarkers[i-1]=m;
+}
 function updateMarker(which){
   if(which==='origin'){
     const p=[Number($('olat').value),Number($('olon').value)];
@@ -218,38 +234,58 @@ function activatePick(mode){
   pickMode=mode;
   $('pickOrigin').classList.toggle('active',mode==='origin');
   $('pickDestination').classList.toggle('active',mode==='destination');
-  $('pickhelp').textContent=mode==='origin'?'Now click the origin location on the map.':mode==='destination'?'Now click the destination location on the map.':'Click a button, then click the desired location on the map.';
+  document.querySelectorAll('.wpPick').forEach(b=>b.classList.toggle('active',mode===`waypoint${b.dataset.wp}`));
+  $('pickhelp').textContent=mode==='origin'?'Now click the origin location on the map.':mode==='destination'?'Now click the destination location on the map.':mode?.startsWith('waypoint')?`Now click the location for ${mode.replace('waypoint','Waypoint ')}.`:'Click a button, then click the desired location on the map.';
 }
 $('pickOrigin').onclick=()=>activatePick('origin');
 $('pickDestination').onclick=()=>activatePick('destination');
+document.querySelectorAll('.wpPick').forEach(b=>b.onclick=()=>activatePick(`waypoint${b.dataset.wp}`));
 map.on('click',e=>{
   if(!pickMode)return;
   const p=[e.latlng.lat,e.latlng.lng];
-  if(pickMode==='origin'){setOrigin(p);status('Origin selected on map. Choose destination or calculate the route.');}
-  else{setDest(p);status('Destination selected on map. Click Calculate maritime route.');}
+  if(pickMode==='origin'){setOrigin(p);status('Origin selected on map.');}
+  else if(pickMode==='destination'){setDest(p);status('Destination selected on map.');}
+  else if(pickMode.startsWith('waypoint')){const i=Number(pickMode.replace('waypoint',''));setWaypoint(i,p);status(`Waypoint ${i} selected on map.`);}
   activatePick(null);
 });
 
-$('olat').addEventListener('change',()=>updateMarker('origin'));
-$('olon').addEventListener('change',()=>updateMarker('origin'));
-$('dlat').addEventListener('change',()=>updateMarker('destination'));
-$('dlon').addEventListener('change',()=>updateMarker('destination'));
-updateMarker('origin');updateMarker('destination');
+$('olat').addEventListener('change',()=>{updateMarker('origin');invalidateRoute('Origin changed. Calculate the maritime route again.');});
+$('olon').addEventListener('change',()=>{updateMarker('origin');invalidateRoute('Origin changed. Calculate the maritime route again.');});
+$('dlat').addEventListener('change',()=>{updateMarker('destination');invalidateRoute('Destination changed. Calculate the maritime route again.');});
+$('dlon').addEventListener('change',()=>{updateMarker('destination');invalidateRoute('Destination changed. Calculate the maritime route again.');});
+for(let i=1;i<=3;i++){
+  $(`wp${i}lat`).addEventListener('change',()=>{updateWaypointMarker(i);invalidateRoute(`Waypoint ${i} changed. Calculate the maritime route again.`);});
+  $(`wp${i}lon`).addEventListener('change',()=>{updateWaypointMarker(i);invalidateRoute(`Waypoint ${i} changed. Calculate the maritime route again.`);});
+}
+updateMarker('origin');updateMarker('destination');for(let i=1;i<=3;i++)updateWaypointMarker(i);
 
 async function getRoute(){
-  const olon=Number($('olon').value), olat=Number($('olat').value), dlon=Number($('dlon').value), dlat=Number($('dlat').value);
-  if(!Number.isFinite(olon)||!Number.isFinite(olat)||!Number.isFinite(dlon)||!Number.isFinite(dlat))throw new Error('Please enter valid latitude/longitude coordinates.');
-  if(Math.abs(olat)>90||Math.abs(dlat)>90||Math.abs(olon)>180||Math.abs(dlon)>180)throw new Error('Latitude must be between -90 and 90; longitude between -180 and 180.');
+  const startPoint=[Number($('olat').value),Number($('olon').value)];
+  const endPoint=[Number($('dlat').value),Number($('dlon').value)];
+  const waypoints=[];
+  for(let i=1;i<=3;i++){const p=waypointPoint(i);if(p)waypoints.push({i,p});}
+  const sequence=[{name:'Origin',p:startPoint},...waypoints.map(x=>({name:`Waypoint ${x.i}`,p:x.p})),{name:'Destination',p:endPoint}];
+  for(const x of sequence){if(!Number.isFinite(x.p[0])||!Number.isFinite(x.p[1]))throw new Error(`Please enter valid coordinates for ${x.name}.`);if(Math.abs(x.p[0])>90||Math.abs(x.p[1])>180)throw new Error(`Invalid coordinates for ${x.name}.`);}
   status('Loading maritime routing network...');
   let seaRoute,lastImportError=null,routeEngine='';
   const moduleUrls=['https://cdn.jsdelivr.net/npm/searoute-ts@2.3.0/+esm','https://unpkg.com/searoute-ts@2.3.0/dist/esm/index.js','https://esm.sh/searoute-ts@2.3.0'];
   for(const url of moduleUrls){try{const mod=await import(url);if(typeof mod.seaRoute==='function'){seaRoute=mod.seaRoute;routeEngine=url;break;}lastImportError=new Error('Module loaded but seaRoute export was not found.');}catch(e){lastImportError=e;}}
   if(typeof seaRoute!=='function')throw new Error('Could not load the maritime routing engine.'+(lastImportError?.message?` (${lastImportError.message})`:''));
   const restrictions=[];if($('avoidSuez').checked)restrictions.push('suez');if($('avoidPanama').checked)restrictions.push('panama');
-  status('Routing engine loaded. Calculating maritime route...');
-  const result=seaRoute([olon,olat],[dlon,dlat],{units:'kilometers',appendOriginDestination:true,returnPassages:true,maxSnapDistanceKm:250,antimeridian:'split',allowArctic:false,restrictions});
-  if(!result||!result.geometry)throw new Error('No maritime route was found between the selected points.');
-  return {geometry:result.geometry,distanceKm:Number(result.properties?.length||0),snapOriginKm:Number(result.properties?.originSnapKm||0),snapDestinationKm:Number(result.properties?.destinationSnapKm||0),totalDistanceKm:Number(result.properties?.length||0)+Number(result.properties?.originSnapKm||0)+Number(result.properties?.destinationSnapKm||0),routeEngine,passages:result.properties?.passages||[],restrictions};
+  const segments=[];let totalDistanceKm=0;
+  for(let i=0;i<sequence.length-1;i++){
+    status(`Calculating maritime leg ${i+1}/${sequence.length-1}: ${sequence[i].name} → ${sequence[i+1].name}...`);
+    const a=sequence[i].p,b=sequence[i+1].p;
+    const result=seaRoute([a[1],a[0]],[b[1],b[0]],{units:'kilometers',appendOriginDestination:true,returnPassages:true,maxSnapDistanceKm:250,antimeridian:'split',allowArctic:false,restrictions});
+    if(!result||!result.geometry)throw new Error(`No maritime route was found for ${sequence[i].name} → ${sequence[i+1].name}.`);
+    let segs=result.geometry.type==='MultiLineString'?result.geometry.coordinates:[result.geometry.coordinates];
+    segs=segs.filter(x=>Array.isArray(x)&&x.length>=2);
+    segments.push(...segs);
+    totalDistanceKm+=Number(result.properties?.length||0)+Number(result.properties?.originSnapKm||0)+Number(result.properties?.destinationSnapKm||0);
+  }
+  if(!segments.length)throw new Error('No maritime route geometry was returned.');
+  const geometry=segments.length===1?{type:'LineString',coordinates:segments[0]}:{type:'MultiLineString',coordinates:segments};
+  return {geometry,distanceKm:totalDistanceKm,totalDistanceKm,routeEngine,restrictions,waypointCount:waypoints.length};
 }
 
 $('route').onclick=async()=>{
@@ -258,12 +294,12 @@ $('route').onclick=async()=>{
     const r=await getRoute();routeCoords=r.geometry.coordinates;
     if(routeLayer)map.removeLayer(routeLayer);
     routeLayer=L.geoJSON({type:'Feature',geometry:r.geometry},{style:{weight:4}}).addTo(map);
-    updateMarker('origin');updateMarker('destination');
+    updateMarker('origin');updateMarker('destination');for(let i=1;i<=3;i++)updateWaypointMarker(i);
     map.fitBounds(routeLayer.getBounds(),{padding:[20,20]});
     $('dist').textContent=kmToNm(r.totalDistanceKm).toFixed(0)+' NM';
     $('npts').textContent=r.geometry.type==='MultiLineString'?r.geometry.coordinates.reduce((n,x)=>n+x.length,0):r.geometry.coordinates.length;
     $('restrictions').textContent=r.restrictions.length?r.restrictions.join(', '):'None';
-    status(`Maritime route calculated successfully. ${kmToNm(r.totalDistanceKm).toFixed(0)} NM total.`+(r.restrictions.length?` Avoided: ${r.restrictions.join(', ')}.`:''));
+    status(`Maritime route calculated successfully. ${kmToNm(r.totalDistanceKm).toFixed(0)} NM total with ${r.waypointCount} intermediate waypoint${r.waypointCount===1?'':'s'}.`+(r.restrictions.length?` Avoided: ${r.restrictions.join(', ')}.`:''));
     $('waves').disabled=false;
   }catch(e){console.error(e);status(e.message||'Route calculation failed.',true);}finally{$('route').disabled=false;}
 };

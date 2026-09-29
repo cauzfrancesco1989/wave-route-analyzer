@@ -1,4 +1,4 @@
-# Wave Route Analyzer V3.8
+# Wave Route Analyzer V3.9
 
 Browser UI + Vercel Python Function + Copernicus Marine.
 
@@ -89,3 +89,14 @@ The code now uses `.month` for a `DatetimeIndex` and `.dt.month` for a pandas Se
 - The rose is explicitly based on wave direction **FROM** which the waves arrive, clockwise from True North.
 - The vessel heading is shown as a reference value; the panel also summarizes the distribution into head seas, bow quartering, beam seas, stern quartering and following seas.
 - CSV export now includes the 16 directional bin counts.
+
+
+## V3.9 updates
+
+- Added up to 3 optional intermediate waypoints.
+- Route is calculated sequentially: Origin → Waypoint 1 → Waypoint 2 → Waypoint 3 → Destination.
+- Empty waypoint fields are skipped.
+- Each waypoint can be entered by latitude/longitude or selected directly on the map.
+- Waypoint markers are draggable.
+- Maritime restrictions (Suez/Panama) are applied to every leg.
+- Total route distance is the sum of all routed legs and endpoint snap distances.
