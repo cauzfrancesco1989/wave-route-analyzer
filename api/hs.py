@@ -9,7 +9,7 @@ import copernicusmarine
 
 DATASET_ID = "cmems_mod_glo_wav_my_0.2deg_PT3H-i"
 VARIABLE = "VHM0"
-MAX_POINTS = 24
+MAX_POINTS = 100
 MAX_WORKERS = 4
 
 def percentile(values, q):
@@ -25,7 +25,7 @@ def percentile(values, q):
         return xs[int(k)]
     return xs[f] + (xs[c] - xs[f]) * (k - f)
 
-def summarize_point(lon, lat, start, end):
+def summarize_point(lon, lat, start, end, season):
     try:
         df = copernicusmarine.read_dataframe(
             dataset_id=DATASET_ID,
@@ -53,6 +53,33 @@ def summarize_point(lon, lat, start, end):
                 return {"lon": lon, "lat": lat, "count": 0, "error": f"VHM0 column not found. Columns: {list(df.columns)}"}
             series = df[numeric[0]]
 
+        # Optional meteorological season filter:
+        # Season 1 = Dec/Jan/Feb, Season 2 = Mar/Apr/May,
+        # Season 3 = Jun/Jul/Aug, Season 4 = Sep/Oct/Nov.
+        if season in (1, 2, 3, 4):
+            month_map = {
+                1: {12, 1, 2},
+                2: {3, 4, 5},
+                3: {6, 7, 8},
+                4: {9, 10, 11},
+            }
+            months = month_map[season]
+            try:
+                idx = df.index
+                month_mask = [getattr(t, "month", None) in months for t in idx]
+                if any(month_mask):
+                    series = series.loc[month_mask]
+                else:
+                    return {
+                        "lon": lon, "lat": lat, "count": 0,
+                        "error": f"No observations in selected season within the requested historical period (season {season})."
+                    }
+            except Exception:
+                return {
+                    "lon": lon, "lat": lat, "count": 0,
+                    "error": "Could not apply the seasonal month filter to the Copernicus time index."
+                }
+
         vals = []
         for x in series.tolist():
             try:
@@ -63,7 +90,7 @@ def summarize_point(lon, lat, start, end):
                 pass
 
         if not vals:
-            return {"lon": lon, "lat": lat, "count": 0, "error": "VHM0 contained no finite numeric values."}
+            return {"lon": lon, "lat": lat, "count": 0, "error": "VHM0 contained no finite numeric values after the selected season filter."}
 
         return {
             "lon": lon,
@@ -115,6 +142,10 @@ class handler(BaseHTTPRequestHandler):
                 raise ValueError(f"Too many route points. Maximum is {MAX_POINTS}.")
             start = datetime.fromisoformat(payload["start"].replace("Z", "+00:00"))
             end = datetime.fromisoformat(payload["end"].replace("Z", "+00:00"))
+            season_raw = payload.get("season", "all")
+            season = None if season_raw in (None, "", "all") else int(season_raw)
+            if season not in (None, 1, 2, 3, 4):
+                raise ValueError("Season must be all, 1, 2, 3, or 4.")
             if end <= start:
                 raise ValueError("End date must be after start date.")
             if not os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME") or not os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD"):
@@ -122,12 +153,12 @@ class handler(BaseHTTPRequestHandler):
 
             results = [None] * len(points)
             with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-                futures = {pool.submit(summarize_point, float(p["lon"]), float(p["lat"]), start, end): i for i, p in enumerate(points)}
+                futures = {pool.submit(summarize_point, float(p["lon"]), float(p["lat"]), start, end, season): i for i, p in enumerate(points)}
                 for future in as_completed(futures):
                     results[futures[future]] = future.result()
 
             failures = [r for r in results if not r or not math.isfinite(float(r.get("mean", float("nan"))))]
-            self._send(200, {"dataset": DATASET_ID, "variable": VARIABLE, "points": results, "valid_points": len(results) - len(failures), "failed_points": len(failures)})
+            self._send(200, {"dataset": DATASET_ID, "variable": VARIABLE, "season": season if season is not None else "all", "points": results, "valid_points": len(results) - len(failures), "failed_points": len(failures)})
         except Exception as e:
             self._send(502, {"error": str(e)})
 

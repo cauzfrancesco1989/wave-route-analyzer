@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wave Route Analyzer V3.2</title>
+<title>Wave Route Analyzer V3.3</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -21,7 +21,7 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
 </style>
 </head>
 <body>
-<header><h1>Wave Route Analyzer — V3.2</h1><span>Copernicus Marine · VHM0</span></header>
+<header><h1>Wave Route Analyzer — V3.3</h1><span>Copernicus Marine · VHM0</span></header>
 <div class="app">
 <aside>
   <label>Origin</label>
@@ -49,8 +49,22 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
     <option value="1y">Previous year</option><option value="5y">Last 5 years</option>
     <option value="10y">Last 10 years</option><option value="20y">Last 20 years</option>
   </select>
-  <label>Sample spacing</label>
-  <select id="spacing"><option value="100">54 NM</option><option value="200">108 NM</option><option value="300">162 NM</option></select>
+  <label>Number of sampled points</label>
+  <select id="sampleCount">
+    <option value="10">10 points</option>
+    <option value="20">20 points</option>
+    <option value="30" selected>30 points</option>
+    <option value="50">50 points</option>
+    <option value="100">100 points</option>
+  </select>
+  <label>Season filter</label>
+  <select id="season">
+    <option value="all" selected>All seasons</option>
+    <option value="1">Season 1 — Dec / Jan / Feb</option>
+    <option value="2">Season 2 — Mar / Apr / May</option>
+    <option value="3">Season 3 — Jun / Jul / Aug</option>
+    <option value="4">Season 4 — Sep / Oct / Nov</option>
+  </select>
   <button id="waves" disabled>Calculate historical Hs</button>
   <button id="csv" class="secondary" disabled>Export CSV</button>
   <div id="status">Enter coordinates or select origin and destination directly on the map.</div>
@@ -163,14 +177,37 @@ $('route').onclick=async()=>{
   }catch(e){console.error(e);status(e.message||'Route calculation failed.',true);}finally{$('route').disabled=false;}
 };
 
-function sampleLine(coords,spacingKm){
-  const segments=(coords.length&&Array.isArray(coords[0][0]))?coords:[coords];const out=[],dist=[];let cumulative=0;
-  for(const segment of segments){if(!segment||segment.length<2)continue;if(out.length===0){out.push(segment[0]);dist.push(cumulative);}
-    for(let k=0;k<segment.length-1;k++){const a=segment[k],b=segment[k+1],seg=hav(a,b),n=Math.max(1,Math.ceil(seg/spacingKm));for(let i=1;i<=n;i++){const f=i/n;out.push([a[0]+f*(b[0]-a[0]),a[1]+f*(b[1]-a[1])]);dist.push(cumulative+seg*f);}cumulative+=seg;}
-  }return {points:out,dist};
+function sampleLine(coords,count){
+  const segments=(coords.length&&Array.isArray(coords[0][0]))?coords:[coords];
+  const verts=[], cumulative=[], segmentStarts=[];
+  let total=0;
+  for(const segment of segments){
+    if(!segment||segment.length<2)continue;
+    if(verts.length===0){
+      verts.push(segment[0]); cumulative.push(total);
+    }
+    for(let k=0;k<segment.length-1;k++){
+      const a=segment[k],b=segment[k+1],seg=hav(a,b);
+      total+=seg; verts.push(b); cumulative.push(total);
+    }
+    segmentStarts.push(total);
+  }
+  if(verts.length<2)return {points:verts,dist:cumulative};
+  const n=Math.max(2,Math.min(100,Number(count)||30));
+  const points=[],dist=[];
+  for(let j=0;j<n;j++){
+    const target=total*j/(n-1);
+    let k=0;
+    while(k<cumulative.length-2 && cumulative[k+1]<target)k++;
+    const a=verts[k],b=verts[k+1],d0=cumulative[k],d1=cumulative[k+1];
+    const f=(d1>d0)?(target-d0)/(d1-d0):0;
+    points.push([a[0]+f*(b[0]-a[0]),a[1]+f*(b[1]-a[1])]);
+    dist.push(target);
+  }
+  return {points,dist};
 }
-async function fetchHs(points,start,end){
-  const r=await fetch('/api/hs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({points:points.map(p=>({lon:Number(p.lon),lat:Number(p.lat)})),start:start.toISOString(),end:end.toISOString()})});
+async function fetchHs(points,start,end,season){
+  const r=await fetch('/api/hs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({points:points.map(p=>({lon:Number(p.lon),lat:Number(p.lat)})),start:start.toISOString(),end:end.toISOString(),season})});
   const text=await r.text();let j={};try{j=JSON.parse(text)}catch(e){}
   if(!r.ok)throw new Error(j.error||`Wave API HTTP ${r.status}`);
   if(!Array.isArray(j.points))throw new Error('Copernicus API returned no point results.');
@@ -189,10 +226,12 @@ function renderDebug(rows){
 $('waves').onclick=async()=>{
   if(!routeCoords.length)return;$('waves').disabled=true;$('csv').disabled=true;status('Sampling the route and requesting historical wave data...');
   try{
-    const sm=sampleLine(routeCoords,Number($('spacing').value)),{start,end}=dates($('period').value);const maxPoints=Math.min(sm.points.length,24),selected=[];
-    for(let i=0;i<maxPoints;i++){const idx=Math.round(i*(sm.points.length-1)/(maxPoints-1||1));selected.push({idx,lon:sm.points[idx][0],lat:sm.points[idx][1]});}
-    status(`Requesting Copernicus VHM0 for ${selected.length} route points...`);
-    const response=await fetchHs(selected,start,end),results=response.points;
+    const sm=sampleLine(routeCoords,Number($('sampleCount').value)),{start,end}=dates($('period').value);
+    const selected=sm.points.map((p,idx)=>({idx,lon:p[0],lat:p[1]}));
+    const season=$('season').value;
+    const seasonLabel=$('season').selectedOptions[0].textContent;
+    status(`Requesting Copernicus VHM0 for ${selected.length} route points (${seasonLabel})...`);
+    const response=await fetchHs(selected,start,end,season),results=response.points;
     if(results.length!==selected.length)throw new Error(`Copernicus returned ${results.length} points for ${selected.length} requested points.`);
     const rows=[];
     for(let i=0;i<selected.length;i++){
@@ -211,11 +250,11 @@ $('waves').onclick=async()=>{
     $('max').textContent=sMax? sMax.max.toFixed(2)+' m':'—';
     $('p95').textContent=sP95? sP95.p95.toFixed(2)+' m':'—';
     $('p99').textContent=sP99? sP99.p99.toFixed(2)+' m':'—';
-    draw(rows);$('csv').disabled=false;status(`Completed ${rows.length} sampled points. Historical Hs from Copernicus Marine VHM0.`);
+    draw(rows);$('csv').disabled=false;status(`Completed ${rows.length} sampled points. Historical Hs from Copernicus Marine VHM0. Season filtering is applied server-side by UTC month. ${season==='all'?'All seasons':seasonLabel}.`);
   }catch(e){console.error(e);status(e.message||'Historical Hs calculation failed.',true);}finally{$('waves').disabled=false;}
 };
 function draw(rows){if(chart)chart.destroy();chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>kmToNm(r.distanceKm).toFixed(0)),datasets:[{label:'Mean Hs',data:rows.map(r=>r.mean),borderWidth:2,pointRadius:2,tension:.15},{label:'P95 Hs',data:rows.map(r=>r.p95),borderWidth:1,pointRadius:1,borderDash:[5,5],tension:.15}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance (NM)'}},y:{title:{display:true,text:'Hs (m)'},beginAtZero:true}}}});}
-$('csv').onclick=()=>{const head='lon,lat,distance_nm,observations,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.count,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_2.csv';a.click();};
+$('csv').onclick=()=>{const head='lon,lat,distance_nm,observations,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.count,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_3.csv';a.click();};
 </script>
 </body>
 </html>
