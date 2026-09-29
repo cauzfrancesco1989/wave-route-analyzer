@@ -70,10 +70,13 @@ def summarize_point(lon, lat, start, end, season):
                 # as a DatetimeIndex or as a 'time' column. Handle both.
                 if "time" in df.columns:
                     times = pd.to_datetime(df["time"], utc=True, errors="coerce")
+                    # pandas Series -> .dt accessor
+                    month_mask = times.dt.month.isin(months).to_numpy()
                 else:
                     times = pd.to_datetime(df.index, utc=True, errors="coerce")
+                    # pandas DatetimeIndex -> use .month directly
+                    month_mask = times.month.isin(months).to_numpy()
 
-                month_mask = times.dt.month.isin(months).to_numpy()
                 if month_mask.any():
                     series = series.iloc[month_mask]
                 else:
