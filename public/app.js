@@ -1,159 +1,10 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wave Route Analyzer V3.26</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<style>
-:root{--bg:#eef2f5;--panel:#fff;--ink:#17202a;--muted:#667085;--line:#d9e0e6;--accent:#1769aa;--ok:#067647;--bad:#b42318}
-*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--ink)}
-header{height:62px;background:#102a43;color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between}header h1{font-size:19px;margin:0}header span{font-size:12px;opacity:.75}
-.header-right{display:flex;align-items:center;gap:12px}.color-toggle{display:flex;align-items:center;gap:8px;margin:0;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.color-toggle input{position:absolute;opacity:0;width:1px;height:1px}.toggle-slider{position:relative;width:42px;height:22px;border-radius:999px;background:#52616b;border:1px solid rgba(255,255,255,.35);transition:.18s}.route-color-select{width:auto;min-width:245px;padding:6px 28px 6px 9px;border:1px solid rgba(255,255,255,.45);background:#fff;color:#102a43;font-size:12px;font-weight:700}.toggle-slider::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.18s;box-shadow:0 1px 2px rgba(0,0,0,.25)}.color-toggle input:checked + .toggle-slider{background:#1e9e62}.color-toggle input:checked + .toggle-slider::after{transform:translateX(20px)}.hs-legend{position:absolute;left:12px;top:12px;z-index:900;background:rgba(255,255,255,.95);border:1px solid #d6dbe1;border-radius:8px;padding:9px 10px;box-shadow:0 2px 10px rgba(0,0,0,.14);font-size:10px;color:#17202a;min-width:112px}.hs-legend-title{font-weight:800;font-size:11px;margin-bottom:6px}.hs-legend-note{margin-top:7px;padding-top:6px;border-top:1px solid #e1e5ea;color:#667085;font-size:9px;line-height:1.35}.hs-legend-row{display:flex;align-items:center;gap:6px;line-height:1.55}.hs-swatch{width:18px;height:9px;border-radius:2px;border:1px solid rgba(0,0,0,.12)}
-.app{display:grid;grid-template-columns:minmax(280px,360px) 7px minmax(400px,1fr);height:calc(100vh - 62px)}
-aside{background:var(--panel);padding:15px;overflow:auto;border-right:1px solid var(--line)}#map{height:100%}.leaflet-container.pick-mode{cursor:crosshair!important}.leaflet-container.pick-mode .leaflet-interactive{cursor:crosshair!important}.resizer{background:#d7dee5;cursor:col-resize;position:relative;z-index:20}.resizer::after{content:"";position:absolute;left:2px;top:50%;width:3px;height:52px;transform:translateY(-50%);border-radius:3px;background:#9aa9b5}.resizer:hover,.resizer.dragging{background:#b9c7d2}.header-logo{height:42px;min-width:118px;padding:4px 9px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center}.header-logo img{display:block;max-height:34px;max-width:112px;width:auto;height:auto}
-label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,select,button{width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:6px;background:white;font:inherit}button{border:0;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-top:10px}button.secondary{background:#52616b}button.ghost{background:#fff;color:var(--accent);border:1px solid #9bbbd5}button.active{outline:2px solid #f59e0b;outline-offset:1px}button:disabled{opacity:.45;cursor:not-allowed}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.card{margin-top:13px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#fafbfc}.metric{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #edf0f2;font-size:12px}.metric:last-child{border:0}
-#status{font-size:11px;line-height:1.4;margin-top:10px;color:var(--muted)}.chartbox{height:250px;margin-top:8px}.small{font-size:10px;color:var(--muted);line-height:1.35}
-.maptools{display:grid;grid-template-columns:1fr 1fr;gap:6px}.waypoint{margin-top:7px;padding:8px;border:1px solid #e4e8ec;border-radius:7px;background:#fafbfc}.waypoint b{font-size:11px}.waypoint button{margin-top:6px}.maptools button{margin-top:0}.pickhelp{font-size:10px;color:var(--muted);margin-top:6px}.debug{font-size:10px;max-height:220px;overflow:auto;margin-top:7px;background:#fff;border:1px solid #e6e9ec;border-radius:6px;padding:7px}.debug table{width:100%;border-collapse:collapse}.debug th,.debug td{padding:3px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}.debug th:first-child,.debug td:first-child{text-align:left}
-.boat-icon{width:14px;height:28px;position:relative;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}.boat-icon::before{content:' ';position:absolute;left:2px;top:1px;width:10px;height:25px;background:#fff;border:1.5px solid #102a43;border-radius:50% 50% 32% 32% / 62% 62% 28% 28%;clip-path:polygon(50% 0%,100% 24%,88% 100%,12% 100%,0% 24%)}.boat-icon::after{content:'';position:absolute;left:6px;top:7px;width:2.5px;height:16px;background:#102a43;border-radius:2px;opacity:.9}
-.direction-card{margin-top:13px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#fafbfc}.direction-card h3{font-size:13px;margin:0 0 5px}.direction-card .selected-note{margin:0 0 8px}.direction-chart{height:245px;position:relative}.direction-chart canvas{width:100%!important;height:100%!important}.direction-point-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:8px 0}.direction-point-metric{border:1px solid #e4e8ec;border-radius:6px;padding:6px;background:#fff}.direction-point-metric b{display:block;font-size:13px}.direction-point-metric span{font-size:9px;color:#667085}.direction-note{font-size:9px;color:#667085;line-height:1.35;margin-top:7px}.direction-legend{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:8px}.direction-legend div{border:1px solid #e4e8ec;border-radius:5px;padding:5px;text-align:center;font-size:9px;background:#fff}.direction-legend b{display:block;font-size:11px;color:#17202a}.map-rose-icon{width:72px;height:72px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));}.map-rose-icon img{width:72px;height:72px;display:block}.map-rose-wrap{width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.92);border:2px solid #fff}.direction-empty{font-size:11px;color:#667085;padding:18px 6px;text-align:center;border:1px dashed #d9e0e6;border-radius:7px;background:#fff}
-.modal{position:fixed;inset:0;background:rgba(16,42,67,.42);display:none;align-items:center;justify-content:center;z-index:5000;padding:20px}
-.modal.open{display:flex}
-.modal-card{width:min(620px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:12px;box-shadow:0 18px 55px rgba(0,0,0,.28);padding:16px}
-.modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.modal-head h2{font-size:17px;margin:0}.modal-close{width:auto;margin:0;padding:6px 10px;background:#eef2f5;color:#17202a;font-size:18px;line-height:1}
-.point-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:12px 0}.point-metric{border:1px solid #e4e8ec;border-radius:7px;padding:7px;background:#fafbfc}.point-metric b{display:block;font-size:14px}.point-metric span{font-size:10px;color:#667085}
-.rose-wrap{height:380px;position:relative;margin-top:4px}.rose-wrap canvas{width:100%!important;height:100%!important}.rose-boat-overlay{position:absolute;left:50%;top:50%;width:30px;height:54px;transform-origin:50% 50%;pointer-events:none;z-index:5;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));}.rose-boat-overlay::before{content:"";position:absolute;left:6px;top:1px;width:18px;height:50px;background:#fff;border:2px solid #1769aa;border-radius:50% 50% 32% 32% / 62% 62% 28% 28%;clip-path:polygon(50% 0%,100% 24%,88% 100%,12% 100%,0% 24%)}.rose-boat-overlay::after{content:"";position:absolute;left:12px;top:12px;width:6px;height:29px;background:#1769aa;border-radius:3px}.rose-heading-label{position:absolute;left:50%;top:50%;transform:translate(-50%,88px);font-size:10px;font-weight:800;color:#1769aa;background:rgba(255,255,255,.9);padding:2px 5px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:6}.rose-note{font-size:10px;color:#667085;line-height:1.4;margin-top:6px}.rose-legend{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:9px}.rose-legend div{border:1px solid #e4e8ec;border-radius:6px;padding:6px;text-align:center;font-size:10px}.rose-legend b{display:block;font-size:12px;color:#17202a}.selected-note{font-size:11px;color:#52616b;margin-top:7px}
 
-
-.search-block{margin-top:6px;padding:8px;border:1px solid #e4e8ec;border-radius:7px;background:#fafbfc}.search-label{font-size:10px;font-weight:800;color:#52616b;margin-bottom:4px}.search-row{display:grid;grid-template-columns:1fr auto;gap:5px}.search-row input{margin:0;font-size:11px;padding:7px 8px}.search-row button{width:auto;margin:0;padding:7px 9px;font-size:11px}.search-results{margin-top:5px;display:none;max-height:150px;overflow:auto;border:1px solid #d9e0e6;border-radius:6px;background:#fff}.search-results.open{display:block}.search-result{padding:7px 8px;border-bottom:1px solid #eef1f3;cursor:pointer;font-size:11px;line-height:1.25}.search-result:last-child{border-bottom:0}.search-result:hover{background:#f1f6fa}.search-result b{display:block;color:#17202a}.search-result span{display:block;color:#667085;font-size:9px;margin-top:2px}.search-status{font-size:9px;color:#667085;margin-top:4px;min-height:12px}.search-pin-note{font-size:9px;color:#667085;margin-top:4px}
-@media(max-width:850px){.header-right{gap:6px}.color-toggle span:first-child{display:none}.app{grid-template-columns:1fr;height:auto}.resizer{display:none}#map{height:55vh}aside{order:2}}
-</style>
-
-<style>
-.hs-definition {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2000;
-  padding: 7px 14px;
-  background: rgba(255,255,255,0.96);
-  border-top: 1px solid #d6dbe1;
-  color: #4b5563;
-  font-size: 11px;
-  line-height: 1.35;
-  text-align: center;
-  box-shadow: 0 -1px 4px rgba(0,0,0,0.06);
-}
-.hs-definition strong {
-  color: #1f2937;
-}
-</style>
-
-</head>
-<body>
-<header><div><h1>Wave Route Analyzer — V3.26</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-right"><label class="color-toggle" title="Choose how the route is coloured"><span>Route colouring</span><select id="routeColorMode" class="route-color-select"><option value="none">No colouring (single colour)</option><option value="beaufort">Colour by Beaufort (Wind)</option><option value="douglas">Colour by Douglas (Hs)</option></select></label><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></div></header>
-<div class="app">
-<aside id="sidebar">
-  <label>Route points</label>
-  <div class="search-block">
-    <div class="search-label">Origin — search coastal location / port</div>
-    <div class="search-row"><input id="originSearch" type="text" placeholder="e.g. Rotterdam, Singapore, Houston"><button id="searchOrigin" class="ghost">Search</button></div>
-    <div id="originResults" class="search-results"></div><div id="originSearchStatus" class="search-status"></div>
-    <button id="pickOrigin" class="ghost">Pick / move origin on map</button>
-  </div>
-  <div class="search-block">
-    <div class="search-label">Destination — search coastal location / port</div>
-    <div class="search-row"><input id="destinationSearch" type="text" placeholder="e.g. Yokohama, Rotterdam, Singapore"><button id="searchDestination" class="ghost">Search</button></div>
-    <div id="destinationResults" class="search-results"></div><div id="destinationSearchStatus" class="search-status"></div>
-    <button id="pickDestination" class="ghost">Pick / move destination on map</button>
-  </div>
-  <div class="waypoint" id="wp1"><b>Waypoint 1</b><button class="ghost wpPick" data-wp="1">Pick on map</button></div>
-  <div class="waypoint" id="wp2"><b>Waypoint 2</b><button class="ghost wpPick" data-wp="2">Pick on map</button></div>
-  <div class="waypoint" id="wp3"><b>Waypoint 3</b><button class="ghost wpPick" data-wp="3">Pick on map</button></div>
-  <div id="pickhelp" class="pickhelp">Select Origin, up to 3 intermediate waypoints, then Destination directly on the map.</div>
-
-  <label>Route restrictions</label>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:5px">
-    <label style="font-weight:500;margin:0"><input id="avoidSuez" type="checkbox" style="width:auto"> Avoid Suez</label>
-    <label style="font-weight:500;margin:0"><input id="avoidPanama" type="checkbox" style="width:auto"> Avoid Panama</label>
-    <label style="font-weight:500;margin:0;grid-column:1 / -1"><input id="allowArctic" type="checkbox" style="width:auto"> Allow Arctic passages</label>
-  </div>
-  <button id="route">Calculate maritime route</button>
-
-  <label>Historical period</label>
-  <select id="period">
-    <option value="3m">Last 3 months</option><option value="6m">Last 6 months</option>
-    <option value="1y">Previous year</option><option value="5y">Last 5 years</option>
-    <option value="10y">Last 10 years</option><option value="20y">Last 20 years</option>
-  </select>
-  <label>Number of sampled points</label>
-  <select id="sampleCount">
-    <option value="10">10 points</option>
-    <option value="20">20 points</option>
-    <option value="30" selected>30 points</option>
-    <option value="50">50 points</option>
-    <option value="100">100 points</option>
-  </select>
-  <label style="font-weight:500;margin-top:8px"><input id="showHeading" type="checkbox" checked style="width:auto"> Show vessel heading on calculation points</label>
-  <label style="font-weight:500;margin-top:7px"><input id="showMapRoses" type="checkbox" style="width:auto"> Show wave roses on calculation points</label>
-  <div class="pickhelp">Click a vessel symbol or wave rose to inspect the selected point. The rose is shown in this panel without covering the map.</div>
-  <label>Season filter</label>
-  <div class="small" style="margin:-1px 0 5px">The full selected historical period is analysed; the filter keeps only the selected three calendar months in every year of that period.</div>
-  <select id="season">
-    <option value="all" selected>All seasons</option>
-    <option value="1">Season 1 — Dec / Jan / Feb</option>
-    <option value="2">Season 2 — Mar / Apr / May</option>
-    <option value="3">Season 3 — Jun / Jul / Aug</option>
-    <option value="4">Season 4 — Sep / Oct / Nov</option>
-  </select>
-  <button id="waves" disabled>Calculate historical Hs</button>
-  <button id="csv" class="secondary" disabled>Export CSV</button>
-  <div id="status">Enter coordinates or select origin and destination directly on the map.</div>
-
-  <div class="card"><b>Route</b>
-    <div class="metric"><span>Distance</span><span id="dist">—</span></div>
-    <div class="metric"><span>Route points</span><span id="npts">—</span></div><div class="metric"><span>Restrictions</span><span id="restrictions">None</span></div>
-  </div>
-  <div class="card"><b>Hs statistics along sampled route</b>
-    <div class="metric"><span title="Media aritmetica di tutti i valori di significant wave height (Hs) considerati nel periodo e nei mesi selezionati.">Mean Hs ⓘ</span><span id="mean">—</span></div>
-    <div class="metric"><span title="Valore di Hs che divide le osservazioni in due metà: il 50% dei valori è inferiore e il 50% superiore.">Median Hs ⓘ</span><span id="median">—</span></div>
-    <div class="metric"><span title="Il valore massimo di Hs osservato nell'insieme di dati considerato.">Maximum Hs ⓘ</span><span id="max">—</span></div>
-    <div class="metric"><span title="95° percentile di Hs: il 95% delle osservazioni è uguale o inferiore a questo valore, mentre il 5% è superiore.">P95 Hs ⓘ</span><span id="p95">—</span></div>
-    <div class="metric"><span title="99° percentile di Hs: il 99% delle osservazioni è uguale o inferiore a questo valore, mentre l'1% è superiore.">P99 Hs ⓘ</span><span id="p99">—</span></div>
-  </div>
-  <div class="card"><b>Hs along route</b><div class="chartbox"><canvas id="chart"></canvas></div></div>
-  <div class="direction-card" id="directionCard">
-    <h3>Wave direction distribution</h3>
-    <div id="directionSubtitle" class="selected-note">Select a vessel heading or wave-rose point on the map.</div>
-    <div id="directionEmpty" class="direction-empty">No calculation point selected.</div>
-    <div id="directionContent" hidden>
-      <div class="direction-point-grid">
-        <div class="direction-point-metric"><b id="directionMean">—</b><span>Mean Hs</span></div>
-        <div class="direction-point-metric"><b id="directionP95">—</b><span>P95 Hs</span></div>
-        <div class="direction-point-metric"><b id="directionMax">—</b><span>Maximum Hs</span></div>
-        <div class="direction-point-metric"><b id="directionHeading">—</b><span>Vessel heading</span></div>
-      </div>
-      <div class="direction-chart"><canvas id="roseChart"></canvas></div>
-      <div id="directionLegend" class="direction-legend"></div><div class="direction-note"><span style="color:#2f80ed"><b>Blue:</b> global wave product</span> · <span style="color:#7c3aed"><b>Violet:</b> Arctic wave product</span></div>
-      <div class="direction-note"><b>VMDR</b> is the direction FROM which the waves arrive, clockwise from true North. The rose shows the historical distribution of the individual VMDR observations at the selected route point.</div>
-    </div>
-  </div>
-  <details class="card"><summary><b>Copernicus diagnostic</b></summary><div id="debug" class="debug">No wave request yet.</div></details>
-  <p class="small"><b>Routing:</b> searoute-ts / Eurostat 2025 MARNET maritime network. <b>Arctic:</b> Northwest/Northeast Passages are blocked by default; enable “Allow Arctic passages” to permit them. No sea-ice or seasonal navigability model is applied. <b>Heading:</b> local route bearing, clockwise from North. <b>Wave data:</b> Copernicus Marine Global Ocean Waves Reanalysis outside the Arctic; north of 41.12°N the app uses the dedicated Arctic wave products (3 km, hourly) when applicable. Both provide <b>VHM0</b> and <b>VMDR</b>. This is a research/planning tool, not certified navigation.</p>
-</aside>
-<div id="resizer" class="resizer" title="Drag to resize the control panel"></div>
-<div id="map"><div id="hsLegend" class="hs-legend" hidden></div></div>
-</div>
-
-<script>
-const map=L.map('map').setView([35,20],3);
-const osmLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'});
-const satelliteLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles © Esri'});
-const satelliteLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{attribution:'Labels © Esri'});
+const WORLD_BOUNDS=L.latLngBounds([[-85.05112878,-180],[85.05112878,180]]);
+const map=L.map('map',{worldCopyJump:false,maxBounds:WORLD_BOUNDS,maxBoundsViscosity:1}).setView([35,0],2);
+const tileOpts={noWrap:true,bounds:WORLD_BOUNDS,attribution:'© OpenStreetMap contributors'};
+const osmLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',tileOpts);
+const satelliteLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{noWrap:true,bounds:WORLD_BOUNDS,attribution:'Tiles © Esri'});
+const satelliteLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{noWrap:true,bounds:WORLD_BOUNDS,attribution:'Labels © Esri'});
 osmLayer.addTo(map);
 const satelliteWithLabels=L.layerGroup([satelliteLayer,satelliteLabels]);
 L.control.layers({'Standard':osmLayer,'Satellite':satelliteLayer,'Satellite + Labels':satelliteWithLabels},null,{position:'topright',collapsed:true}).addTo(map);
@@ -359,8 +210,8 @@ $('showMapRoses').addEventListener('change',()=>{renderMapRoses(lastRows);render
 
 const searchState={origin:{results:[],query:''},destination:{results:[],query:''}};
 function closeSearchResults(which){$(which+'Results').classList.remove('open');$(which+'Results').innerHTML='';}
-function formatSearchResult(x){const p=x.properties||{};const parts=[p.city,p.state,p.country].filter(Boolean);const kind=p.osm_value||p.type||p.osm_key||'';return {name:p.name||p.label||'Unnamed location',context:parts.join(', '),kind,lon:Number(x.geometry?.coordinates?.[0]),lat:Number(x.geometry?.coordinates?.[1])};}
-function renderSearchResults(which,items){const box=$(which+'Results');if(!items.length){box.innerHTML='<div class="search-result"><b>No suitable locations found</b><span>Try a port name, coastal city or country.</span></div>';box.classList.add('open');return;}box.innerHTML=items.map((x,i)=>`<div class="search-result" data-index="${i}"><b>${escapeHtml(x.name)}</b><span>${escapeHtml([x.context,x.kind].filter(Boolean).join(' · '))}</span></div>`).join('');box.classList.add('open');box.querySelectorAll('.search-result[data-index]').forEach(el=>el.onclick=()=>selectSearchResult(which,Number(el.dataset.index)));}
+function formatSearchResult(x){const p=x.properties||{};const parts=[p.city,p.state,p.country].filter(Boolean);const key=p.osm_key||'';const value=p.osm_value||p.type||'';const kind=value||key||'location';return {name:p.name||p.label||'Unnamed location',context:parts.join(', '),kind,marine:['harbour','harbor','port','marina','pier','dock','quay'].includes(String(value).toLowerCase()),lon:Number(x.geometry?.coordinates?.[0]),lat:Number(x.geometry?.coordinates?.[1])};}
+function renderSearchResults(which,items){const box=$(which+'Results');if(!items.length){box.innerHTML='<div class="search-result"><b>No suitable locations found</b><span>Try a port name, coastal city or country.</span></div>';box.classList.add('open');return;}box.innerHTML=items.map((x,i)=>`<div class="search-result" data-index="${i}"><b>${escapeHtml(x.name)}</b><span>${escapeHtml([x.marine?'Port / harbour':x.kind,x.context].filter(Boolean).join(' · '))}</span></div>`).join('');box.classList.add('open');box.querySelectorAll('.search-result[data-index]').forEach(el=>el.onclick=()=>selectSearchResult(which,Number(el.dataset.index)));}
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function selectSearchResult(which,i){const item=searchState[which].results[i];if(!item)return;const p=[item.lat,item.lon];if(which==='origin'){setOrigin(p);}else{setDest(p);}map.setView(p,Math.max(map.getZoom(),6));$(which+'Search').value=item.name;$(which+'SearchStatus').textContent=`Selected: ${item.name} — pin remains draggable.`;closeSearchResults(which);status(`${which==='origin'?'Origin':'Destination'} selected from search. You can still drag the pin or use Pick on map.`);}
 async function searchCoastal(which){const input=$(which+'Search'),statusEl=$(which+'SearchStatus'),q=input.value.trim();if(q.length<2){statusEl.textContent='Enter at least 2 characters.';return;}statusEl.textContent='Searching ports and coastal locations…';closeSearchResults(which);try{const r=await fetch(`/api/geocode?q=${encodeURIComponent(q)}`,{cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.error||`Search HTTP ${r.status}`);const items=(j.features||[]).map(formatSearchResult).filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lon));searchState[which].results=items;searchState[which].query=q;renderSearchResults(which,items);statusEl.textContent=items.length?`${items.length} result${items.length===1?'':'s'} — select one to place the pin.`:'No results.';}catch(e){statusEl.textContent=e.message||'Search failed.';}}
@@ -470,29 +321,40 @@ $('route').onclick=async()=>{
 };
 
 function sampleLine(coords,count){
+  // Preserve MultiLineString breaks returned by searoute-ts. In particular,
+  // an antimeridian-split Arctic route must NEVER be interpolated from +180°
+  // to -180° as if those were neighbouring longitudes on the same segment.
   const segments=(coords.length&&Array.isArray(coords[0][0]))?coords:[coords];
-  const verts=[], cumulative=[], segmentStarts=[];
+  const usable=[];
   let total=0;
   for(const segment of segments){
-    if(!segment||segment.length<2)continue;
-    if(verts.length===0){
-      verts.push(segment[0]); cumulative.push(total);
-    }
+    if(!Array.isArray(segment)||segment.length<2)continue;
+    let length=0;
+    const cumulative=[0];
     for(let k=0;k<segment.length-1;k++){
-      const a=segment[k],b=segment[k+1],seg=hav(a,b);
-      total+=seg; verts.push(b); cumulative.push(total);
+      length+=hav(segment[k],segment[k+1]);
+      cumulative.push(length);
     }
-    segmentStarts.push(total);
+    if(length>0){
+      usable.push({segment,cumulative,start:total,length,end:total+length});
+      total+=length;
+    }
   }
-  if(verts.length<2)return {points:verts,dist:cumulative};
+  if(!usable.length)return {points:[],dist:[]};
   const n=Math.max(2,Math.min(100,Number(count)||30));
   const points=[],dist=[];
   for(let j=0;j<n;j++){
-    const target=total*j/(n-1);
+    const target=(j===n-1)?total:total*j/(n-1);
+    let item=usable[usable.length-1];
+    for(const candidate of usable){
+      if(target<=candidate.end+1e-9){item=candidate;break;}
+    }
+    const local=Math.max(0,Math.min(item.length,target-item.start));
     let k=0;
-    while(k<cumulative.length-2 && cumulative[k+1]<target)k++;
-    const a=verts[k],b=verts[k+1],d0=cumulative[k],d1=cumulative[k+1];
-    const f=(d1>d0)?(target-d0)/(d1-d0):0;
+    while(k<item.cumulative.length-2 && item.cumulative[k+1]<local)k++;
+    const d0=item.cumulative[k],d1=item.cumulative[k+1];
+    const a=item.segment[k],b=item.segment[k+1];
+    const f=d1>d0?(local-d0)/(d1-d0):0;
     points.push([a[0]+f*(b[0]-a[0]),a[1]+f*(b[1]-a[1])]);
     dist.push(target);
   }
@@ -551,12 +413,3 @@ $('waves').onclick=async()=>{
 };
 function draw(rows){if(chart)chart.destroy();chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>kmToNm(r.distanceKm).toFixed(0)),datasets:[{label:'Mean Hs',data:rows.map(r=>r.mean),borderWidth:2,pointRadius:2,tension:.15},{label:'P95 Hs',data:rows.map(r=>r.p95),borderWidth:1,pointRadius:1,borderDash:[5,5],tension:.15}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance (NM)'}},y:{title:{display:true,text:'Hs (m)'},beginAtZero:true}}}});}
 $('csv').onclick=()=>{const head='lon,lat,distance_nm,heading_deg,wave_mean_from_deg,relative_wave_angle_deg,sea_state,observations,wave_direction_observations,wave_direction_bins_N_to_NNW,wave_source,is_arctic,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.heading,r.waveFrom,r.relativeAngle,r.seaState,r.count,r.waveCount,`\"${(r.waveBins||[]).join('|')}\"`,r.dataSource,r.isArctic,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_17.csv';a.click();};
-</script>
-
-<div class="hs-definition">
-  <strong>Hs — Significant Wave Height:</strong>
-  the average height of the highest one-third of individual waves in a wave record. It is commonly used as a measure of the overall sea state.
-</div>
-
-</body>
-</html>

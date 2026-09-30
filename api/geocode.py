@@ -16,7 +16,7 @@ def photon_search(q, limit=12):
     params = urllib.parse.urlencode({"q": q, "limit": limit, "lang": "en", "dedupe": 1})
     req = urllib.request.Request(
         f"{PHOTON_URL}?{params}",
-        headers={"User-Agent": "Wave-Route-Analyzer/3.24"},
+        headers={"User-Agent": "Wave-Route-Analyzer/3.25 (+https://wave-route-analyzer.vercel.app)"},
         method="GET",
     )
     with urllib.request.urlopen(req, timeout=12) as response:
@@ -25,27 +25,61 @@ def photon_search(q, limit=12):
     return data
 
 
-def rank_feature(f, q):
+def _norm(v):
+    return str(v or "").strip().lower()
+
+
+def rank_feature(f, q, query_variant=""):
     p = f.get("properties", {}) or {}
-    name = str(p.get("name", "")).lower()
-    query = q.lower().strip()
-    osm_key = str(p.get("osm_key", "")).lower()
-    osm_value = str(p.get("osm_value", "")).lower()
-    text = f"{name} {osm_key} {osm_value}".lower()
+    name = _norm(p.get("name"))
+    label = _norm(p.get("label"))
+    query = _norm(q)
+    osm_key = _norm(p.get("osm_key"))
+    osm_value = _norm(p.get("osm_value"))
+    kind = f"{osm_key}:{osm_value}"
     score = 0
+
+    # Exact/strong name matches first.
     if name == query:
-        score += 1000
+        score += 1200
     elif query and query in name:
-        score += 500
-    # Prefer actual port/harbour/marina features when the user searches a
-    # coastal location, while still allowing a normal coastal city result.
-    if any(k in text for k in ("harbour", "harbor", "port", "marina", "pier", "dock")):
+        score += 600
+    elif query and query in label:
+        score += 300
+
+    # Prefer actual marine facilities over generic city/country results.
+    marine_values = {"harbour", "harbor", "port", "marina", "pier", "dock", "quay", "waterway"}
+    if osm_value in marine_values:
+        score += 900
+    if osm_key in {"harbour", "waterway"} and osm_value in marine_values:
         score += 250
-    if osm_key in ("amenity", "harbour", "man_made"):
-        score += 50
-    if osm_value in ("harbour", "port", "marina", "pier", "dock"):
-        score += 150
+    if osm_key == "place" and osm_value in {"city", "town", "village"}:
+        score += 80
+
+    # The targeted query variants should strongly favour marine results.
+    if query_variant in {"port", "harbour"} and osm_value in marine_values:
+        score += 500
+
+    # Explicitly penalise airports and other non-marine transport features.
+    if osm_value in {"aerodrome", "airport", "bus_station", "railway"} or osm_key in {"aeroway", "railway"}:
+        score -= 1200
     return score
+
+
+def merge_features(feature_lists, q):
+    seen = set()
+    merged = []
+    for variant, features in feature_lists:
+        for f in features or []:
+            p = f.get("properties", {}) or {}
+            coords = tuple(f.get("geometry", {}).get("coordinates", []) or [])
+            key = (p.get("osm_type"), p.get("osm_id"), coords)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append((rank_feature(f, q, variant), f))
+    merged.sort(key=lambda x: x[0], reverse=True)
+    return [f for _, f in merged]
 
 
 class handler(BaseHTTPRequestHandler):
@@ -67,31 +101,19 @@ class handler(BaseHTTPRequestHandler):
             if len(q) < 2:
                 return self._send(400, {"error": "Search query is too short."})
 
-            data = photon_search(q, 12)
-            features = data.get("features", []) or []
-            features.sort(key=lambda f: rank_feature(f, q), reverse=True)
-
-            # If the generic query produced no port-like result, make one
-            # restrained second query targeted at ports/harbours.
-            text = json.dumps(features).lower()
-            if features and not any(k in text for k in ("harbour", "harbor", "port", "marina")):
+            # Always query the generic place name plus explicit marine variants.
+            # This avoids returning an airport/city result merely because the
+            # generic Photon response happened to contain the substring "port".
+            feature_lists = []
+            for variant, query_variant in (("", q), ("port", f"{q} port"), ("harbour", f"{q} harbour")):
                 try:
-                    port_data = photon_search(f"{q} port", 8)
-                    port_features = port_data.get("features", []) or []
-                    features.extend(port_features)
-                    seen = set()
-                    unique = []
-                    for f in features:
-                        p = f.get("properties", {}) or {}
-                        key = (p.get("osm_type"), p.get("osm_id"), f.get("geometry", {}).get("coordinates"))
-                        if key in seen:
-                            continue
-                        seen.add(key)
-                        unique.append(f)
-                    features = sorted(unique, key=lambda f: rank_feature(f, q), reverse=True)
+                    data = photon_search(query_variant, 8)
+                    feature_lists.append((variant, data.get("features", []) or []))
                 except Exception:
-                    pass
+                    # One failed provider query should not make the whole search fail.
+                    continue
 
-            return self._send(200, {"features": features[:12], "provider": "Photon / OpenStreetMap"})
+            features = merge_features(feature_lists, q)
+            return self._send(200, {"features": features[:12], "provider": "Photon / OpenStreetMap", "search_mode": "place + port + harbour"})
         except Exception as exc:
             return self._send(502, {"error": f"Location search failed: {exc}"})
