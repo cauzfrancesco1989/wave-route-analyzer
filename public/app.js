@@ -204,8 +204,9 @@ function roseSvgMarkup(r,size=360,detail=true){
       const r0=current,r1=current+(rOuter-ri)*(count/stackTotal);
       const p0=polarPoint(cx,cy,r0,a0),p1=polarPoint(cx,cy,r0,a1),q1=polarPoint(cx,cy,r1,a1),q0=polarPoint(cx,cy,r1,a0);
       const sectorPct=n/total*100,hsPct=count/stackTotal*100;
-      const tooltip=`${roseLabels[i]} (${a0<0?a0+360:a0.toFixed(1)}°–${a1.toFixed(1)}°)\nDirection: ${sectorPct.toFixed(1)}% (${Math.round(n)} obs)\nHs ${hsLabels[j]}: ${hsPct.toFixed(1)}% of this direction (${Math.round(count)} obs)`;
-      parts.push(`<path d="M ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} L ${q0[0].toFixed(1)} ${q0[1].toFixed(1)} A ${r1.toFixed(1)} ${r1.toFixed(1)} 0 0 1 ${q1[0].toFixed(1)} ${q1[1].toFixed(1)} L ${p1[0].toFixed(1)} ${p1[1].toFixed(1)} A ${r0.toFixed(1)} ${r0.toFixed(1)} 0 0 0 ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} Z" fill="${palette[j]}" stroke="#fff" stroke-width="1"><title>${tooltip.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</title></path>`);
+      const tooltip=`${roseLabels[i]} · Direction: ${sectorPct.toFixed(1)}% (${Math.round(n)} obs) · Hs ${hsLabels[j]}: ${hsPct.toFixed(1)}% of direction (${Math.round(count)} obs)`;
+      const escTooltip=tooltip.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      parts.push(`<path d="M ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} L ${q0[0].toFixed(1)} ${q0[1].toFixed(1)} A ${r1.toFixed(1)} ${r1.toFixed(1)} 0 0 1 ${q1[0].toFixed(1)} ${q1[1].toFixed(1)} L ${p1[0].toFixed(1)} ${p1[1].toFixed(1)} A ${r0.toFixed(1)} ${r0.toFixed(1)} 0 0 0 ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} Z" fill="${palette[j]}" stroke="#fff" stroke-width="1" data-rose-tooltip="${escTooltip}" data-direction-pct="${sectorPct.toFixed(1)}" data-hs-pct="${hsPct.toFixed(1)}"><title>${escTooltip}</title></path>`);
       current=r1;
     }
   }
@@ -321,9 +322,16 @@ function selectRosePoint(r,index){
   destroyRose();
   const roseHost=$('roseChart');
   roseHost.innerHTML=roseSvgMarkup(r,360,true);
-  roseHost.querySelectorAll('path').forEach(path=>{path.style.cursor='help';path.addEventListener('mouseenter',()=>{path.style.opacity='.78';});path.addEventListener('mouseleave',()=>{path.style.opacity='1';});});
+  const roseTip=$('roseTooltip');
+  roseHost.querySelectorAll('path[data-rose-tooltip]').forEach(path=>{
+    path.style.cursor='help';
+    path.addEventListener('mouseenter',()=>{path.style.opacity='.78'; if(roseTip){roseTip.textContent=path.getAttribute('data-rose-tooltip')||'';roseTip.hidden=false;}});
+    path.addEventListener('mousemove',(ev)=>{if(!roseTip)return; const box=roseHost.getBoundingClientRect(); let x=ev.clientX-box.left+10,y=ev.clientY-box.top+10; roseTip.style.left=Math.max(4,Math.min(x,box.width-roseTip.offsetWidth-4))+'px'; roseTip.style.top=Math.max(4,Math.min(y,box.height-roseTip.offsetHeight-4))+'px';});
+    path.addEventListener('mouseleave',()=>{path.style.opacity='1'; if(roseTip)roseTip.hidden=true;});
+  });
   roseChart=roseHost;
   renderRoseHsLegend(!!r.isArctic);
+  const heading=Number.isFinite(r.heading)?r.heading:0;
   const relCounts={'Head seas':0,'Bow quartering':0,'Beam seas':0,'Stern quartering':0,'Following seas':0};
   bins.forEach((n,i)=>{const cat=relativeCategoryFromAngle(signedAngleDeg(heading,roseAngles[i]));relCounts[cat]+=n;});
   const order=['Head seas','Bow quartering','Beam seas','Stern quartering','Following seas'];
