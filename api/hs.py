@@ -358,8 +358,8 @@ def summarize_point(lon, lat, start, end, season):
             # Directional rose split by significant wave height. Each sector
             # is radial in proportion to its observation frequency, while the
             # radial stack shows the Hs classes within that direction.
-            # Hs classes: 0-0.5, 0.5-1, 1-1.5, 1.5-2, >=2 m.
-            hs_direction_bins = [[0] * 5 for _ in range(16)]
+            # Hs classes: 0-1, 1-2, 2-3, 3-4, 4-5, >5 m.
+            hs_direction_bins = [[0] * 6 for _ in range(16)]
             try:
                 hs_vals = pd.to_numeric(series, errors="coerce").tolist()
             except Exception:
@@ -371,7 +371,7 @@ def summarize_point(lon, lat, start, end, season):
                         continue
                     idx = int(((d % 360.0) + 11.25) // 22.5) % 16
                     bins[idx] += 1
-                    hidx = 0 if h < 0.5 else 1 if h < 1.0 else 2 if h < 1.5 else 3 if h < 2.0 else 4
+                    hidx = 0 if h < 1.0 else 1 if h < 2.0 else 2 if h < 3.0 else 3 if h < 4.0 else 4 if h < 5.0 else 5
                     hs_direction_bins[idx][hidx] += 1
                 except Exception:
                     pass

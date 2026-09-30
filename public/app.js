@@ -175,17 +175,17 @@ const roseAngles=roseLabels.map((_,i)=>i*22.5);
 function relativeCategoryFromAngle(angle){const a=Math.abs(signedAngleDeg(0,angle));if(a<=30)return 'Head seas';if(a<=75)return 'Bow quartering';if(a<105)return 'Beam seas';if(a<=150)return 'Stern quartering';return 'Following seas';}
 function polarPoint(cx,cy,r,aDeg){const a=(aDeg-90)*Math.PI/180;return [cx+r*Math.cos(a),cy+r*Math.sin(a)];}
 function hsRosePalette(arctic){
-  // Hs classes match the stacked rose concept: 0-0.5, 0.5-1, 1-1.5,
-  // 1.5-2 and >=2 m. Arctic keeps the purple directional identity.
+  // Hs classes: 0-1, 1-2, 2-3, 3-4, 4-5 and >5 m.
+  // The palette is ordered from lowest to highest Hs.
   return arctic
-    ? ['#f3e8ff','#d8b4fe','#a855f7','#7e22ce','#4c1d95']
-    : ['#fffbd8','#b9e3d1','#4dbfc9','#2f80ed','#174ea6'];
+    ? ['#f5e8ff','#d8b4fe','#b06cff','#8b3fd1','#6420a8','#3b0f73']
+    : ['#fffbd8','#b9e3d1','#63c6c8','#3f8fd8','#2456a6','#14356f'];
 }
 function roseSvgData(r,size=48,detail=false){
   const bins=Array.isArray(r.waveBins)?r.waveBins.map(Number):Array(16).fill(0);
   const stacked=Array.isArray(r.waveHsBins)&&r.waveHsBins.length===16
-    ? r.waveHsBins.map(row=>Array.isArray(row)?row.map(Number):[0,0,0,0,0])
-    : bins.map(n=>[0,0,0,0,Number.isFinite(n)?n:0]);
+    ? r.waveHsBins.map(row=>Array.isArray(row)?row.map(Number):[0,0,0,0,0,0])
+    : bins.map(n=>[0,0,0,0,0,Number.isFinite(n)?n:0]);
   const totals=bins.map((n,i)=>Number.isFinite(n)&&n>=0?n:stacked[i].reduce((a,b)=>a+(Number.isFinite(b)&&b>=0?b:0),0));
   const total=totals.reduce((a,b)=>a+b,0);
   if(!total)return '';
@@ -213,7 +213,7 @@ function roseSvgData(r,size=48,detail=false){
     // scales directly with the directional observation frequency.
     const stack=stacked[i];
     const stackTotal=stack.reduce((a,b)=>a+(Number.isFinite(b)&&b>0?b:0),0)||n;
-    for(let j=0;j<5;j++){
+    for(let j=0;j<6;j++){
       const count=Number.isFinite(stack[j])&&stack[j]>0?stack[j]:0;
       if(!count)continue;
       const r0=current;
@@ -267,7 +267,7 @@ function renderRoseHsLegend(arctic){
   const el=$('roseHsLegend');
   if(!el)return;
   const palette=hsRosePalette(!!arctic);
-  const ranges=['0–0.5 m','0.5–1.0 m','1.0–1.5 m','1.5–2.0 m','≥2.0 m'];
+  const ranges=['0–1 m','1–2 m','2–3 m','3–4 m','4–5 m','>5 m'];
   el.innerHTML='<span class="rose-hs-legend-title">Hs:</span>'+ranges.map((label,i)=>`<span class="rose-hs-legend-item"><span class="rose-hs-swatch" style="background:${palette[i]}"></span>${label}</span>`).join('');
   el.hidden=false;
 }
@@ -520,7 +520,7 @@ $('waves').onclick=async()=>{
       const heading=headingFor(sm.points,i);
       const waveFrom=Number.isFinite(Number(h.wave_from_deg))?Number(h.wave_from_deg):NaN;
       const relativeAngle=Number.isFinite(waveFrom)?signedAngleDeg(heading,waveFrom):NaN;
-      rows.push({lon:p.lon,lat:p.lat,distanceKm:sm.dist[p.idx],heading,waveFrom,relativeAngle,seaState:Number.isFinite(relativeAngle)?seaStateClass(relativeAngle):'',count:Number(h.count||0),waveCount:Number(h.wave_direction_count||0),waveBins:Array.isArray(h.wave_direction_bins)?h.wave_direction_bins.map(Number):Array(16).fill(0),waveHsBins:Array.isArray(h.wave_direction_hs_bins)?h.wave_direction_hs_bins.map(row=>Array.isArray(row)?row.map(Number):[0,0,0,0,0]):Array.from({length:16},()=>[0,0,0,0,0]),rawCount:Number(h.raw_count||0),seasonCount:Number(h.season_count||0),seasonName:h.season_name||'',dataSource:h.data_source||'—',isArctic:Boolean(h.is_arctic),iceStatus:h.ice_status||'not_checked',iceAffected:Boolean(h.ice_affected),iceMaxFraction:Number(h.ice_max_fraction),iceMeanFraction:Number(h.ice_mean_fraction),iceMaxThickness:Number(h.ice_max_thickness_m),mean:Number(h.mean),median:Number(h.median),max:Number(h.max),p95:Number(h.p95),p99:Number(h.p99),error:h.error||''});
+      rows.push({lon:p.lon,lat:p.lat,distanceKm:sm.dist[p.idx],heading,waveFrom,relativeAngle,seaState:Number.isFinite(relativeAngle)?seaStateClass(relativeAngle):'',count:Number(h.count||0),waveCount:Number(h.wave_direction_count||0),waveBins:Array.isArray(h.wave_direction_bins)?h.wave_direction_bins.map(Number):Array(16).fill(0),waveHsBins:Array.isArray(h.wave_direction_hs_bins)?h.wave_direction_hs_bins.map(row=>Array.isArray(row)?row.map(Number):[0,0,0,0,0,0]):Array.from({length:16},()=>[0,0,0,0,0,0]),rawCount:Number(h.raw_count||0),seasonCount:Number(h.season_count||0),seasonName:h.season_name||'',dataSource:h.data_source||'—',isArctic:Boolean(h.is_arctic),iceStatus:h.ice_status||'not_checked',iceAffected:Boolean(h.ice_affected),iceMaxFraction:Number(h.ice_max_fraction),iceMeanFraction:Number(h.ice_mean_fraction),iceMaxThickness:Number(h.ice_max_thickness_m),mean:Number(h.mean),median:Number(h.median),max:Number(h.max),p95:Number(h.p95),p99:Number(h.p99),error:h.error||''});
     }
     lastRows=rows;renderDebug(rows);renderCalculationPoints(rows);renderHeadingArrows(rows);renderMapRoses(rows);renderRouteColoring();
     const validRows=rows.filter(r=>Number.isFinite(r.mean));
