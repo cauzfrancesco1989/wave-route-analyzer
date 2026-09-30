@@ -162,37 +162,78 @@ function renderCalculationPoints(rows){
   rows.forEach((r,i)=>{
     if(!Number.isFinite(r.lat)||!Number.isFinite(r.lon))return;
     const hasWave=Array.isArray(r.waveBins)&&r.waveBins.some(v=>Number.isFinite(v)&&Number(v)>0);
-    const color=r.isArctic?'#7c3aed':'#1769aa';
+    const statusColor=r.iceStatus==='ice_affected'?'#f59e0b':(r.iceStatus==='no_wave_data'?'#6b7280':(r.isArctic?'#7c3aed':'#1769aa')); const color=statusColor;
     const marker=L.circleMarker([r.lat,r.lon],{radius:hasWave?3.5:3,weight:1.5,color:'#fff',fillColor:color,fillOpacity:.95,interactive:true,zIndexOffset:180});
     marker.bindTooltip(`<b>Calculation point ${i+1}</b><br>Distance: ${kmToNm(r.distanceKm).toFixed(0)} NM<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}${r.isArctic?'<br><span style=\"color:#7c3aed\"><b>Arctic point</b></span>':''}`,{direction:'top',sticky:true});
     marker.on('click',()=>selectRosePoint(r,i));
     marker.addTo(calcPointLayer);
   });
 }
-function destroyRose(){if(roseChart){roseChart.destroy();roseChart=null;}}
+function destroyRose(){if(roseChart){roseChart.innerHTML="";roseChart=null;}}
 const roseLabels=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const roseAngles=roseLabels.map((_,i)=>i*22.5);
 function relativeCategoryFromAngle(angle){const a=Math.abs(signedAngleDeg(0,angle));if(a<=30)return 'Head seas';if(a<=75)return 'Bow quartering';if(a<105)return 'Beam seas';if(a<=150)return 'Stern quartering';return 'Following seas';}
 function polarPoint(cx,cy,r,aDeg){const a=(aDeg-90)*Math.PI/180;return [cx+r*Math.cos(a),cy+r*Math.sin(a)];}
-function roseSvgData(r,size=48){
+function hsRosePalette(arctic){
+  // Hs classes match the stacked rose concept: 0-0.5, 0.5-1, 1-1.5,
+  // 1.5-2 and >=2 m. Arctic keeps the purple directional identity.
+  return arctic
+    ? ['#f3e8ff','#d8b4fe','#a855f7','#7e22ce','#4c1d95']
+    : ['#fffbd8','#b9e3d1','#4dbfc9','#2f80ed','#174ea6'];
+}
+function roseSvgData(r,size=48,detail=false){
   const bins=Array.isArray(r.waveBins)?r.waveBins.map(Number):Array(16).fill(0);
+  const stacked=Array.isArray(r.waveHsBins)&&r.waveHsBins.length===16
+    ? r.waveHsBins.map(row=>Array.isArray(row)?row.map(Number):[0,0,0,0,0])
+    : bins.map(n=>[0,0,0,0,Number.isFinite(n)?n:0]);
+  const totals=bins.map((n,i)=>Number.isFinite(n)&&n>=0?n:stacked[i].reduce((a,b)=>a+(Number.isFinite(b)&&b>=0?b:0),0));
+  const total=totals.reduce((a,b)=>a+b,0);
+  if(!total)return '';
   const arctic=!!r.isArctic;
-  const palette=arctic?['#5b21b6','#6d28d9','#7c3aed','#8b5cf6','#a855f7','#c026d3','#d946ef','#db2777','#be185d','#9d174d','#86198f','#7e22ce','#9333ea','#a21caf','#c026d3','#7c3aed']:['#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed','#2f80ed'];
-  const maxBin=Math.max(1,...bins.filter(Number.isFinite));
+  const palette=hsRosePalette(arctic);
   const heading=Number.isFinite(r.heading)?r.heading:0;
-  const cx=size/2,cy=size/2,ro=size*.43,ri=size*.10;
+  const cx=size/2,cy=size/2;
+  const ro=size*(detail?.34:.43),ri=size*(detail?.055:.10);
+  const maxRadius=Math.max(1,...totals);
+  const base=detail?size*.07:0;
   const parts=[];
-  for(let i=0;i<16;i++){
-    const a0=roseAngles[i]-11.25,a1=roseAngles[i]+11.25;
-    const p0=polarPoint(cx,cy,ro,a0),p1=polarPoint(cx,cy,ro,a1),q1=polarPoint(cx,cy,ri,a1),q0=polarPoint(cx,cy,ri,a0);
-    const opacity=.18+.70*((Number.isFinite(bins[i])?bins[i]:0)/maxBin);
-    parts.push(`<path d="M ${q0[0].toFixed(1)} ${q0[1].toFixed(1)} L ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} A ${ro.toFixed(1)} ${ro.toFixed(1)} 0 0 1 ${p1[0].toFixed(1)} ${p1[1].toFixed(1)} L ${q1[0].toFixed(1)} ${q1[1].toFixed(1)} Z" fill="${palette[i]}" fill-opacity="${opacity.toFixed(2)}" stroke="#fff" stroke-width=".7"/>`);
+  // Concentric reference rings make the radial-frequency encoding visible.
+  if(detail){
+    for(let f of [.25,.5,.75,1]){
+      const rr=base+(ro-base)*f;
+      parts.push(`<circle cx="${cx}" cy="${cy}" r="${rr.toFixed(1)}" fill="none" stroke="#cfd8df" stroke-width=".8"/>`);
+    }
   }
-  const end=polarPoint(cx,cy,ro*.82,heading), ah=size*.13, aw=size*.065;
-  const left=polarPoint(end[0],end[1],ah,heading+150), right=polarPoint(end[0],end[1],ah,heading-150);
-  const border=`<circle cx="${cx}" cy="${cy}" r="${ro.toFixed(1)}" fill="rgba(255,255,255,.86)" stroke="#1769aa" stroke-width="1.4"/>`;
-  const arrow=`<line x1="${cx}" y1="${cy}" x2="${end[0].toFixed(1)}" y2="${end[1].toFixed(1)}" stroke="#1769aa" stroke-width="1.8"/><polygon points="${end[0].toFixed(1)},${end[1].toFixed(1)} ${left[0].toFixed(1)},${left[1].toFixed(1)} ${right[0].toFixed(1)},${right[1].toFixed(1)}" fill="#1769aa"/>`;
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${border}${parts.join('')}${arrow}</svg>`;
+  for(let i=0;i<16;i++){
+    const n=totals[i]; if(n<=0)continue;
+    const rOuter=base+(ro-base)*(n/maxRadius);
+    const a0=roseAngles[i]-10.6,a1=roseAngles[i]+10.6;
+    let current=ri;
+    // tiny central radius ensures a visible hub while the sector radius still
+    // scales directly with the directional observation frequency.
+    const stack=stacked[i];
+    const stackTotal=stack.reduce((a,b)=>a+(Number.isFinite(b)&&b>0?b:0),0)||n;
+    for(let j=0;j<5;j++){
+      const count=Number.isFinite(stack[j])&&stack[j]>0?stack[j]:0;
+      if(!count)continue;
+      const r0=current;
+      const r1=current+(rOuter-ri)*(count/stackTotal);
+      const p0=polarPoint(cx,cy,r0,a0),p1=polarPoint(cx,cy,r0,a1),q1=polarPoint(cx,cy,r1,a1),q0=polarPoint(cx,cy,r1,a0);
+      const large=0;
+      parts.push(`<path d="M ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} L ${q0[0].toFixed(1)} ${q0[1].toFixed(1)} A ${r1.toFixed(1)} ${r1.toFixed(1)} 0 ${large} 1 ${q1[0].toFixed(1)} ${q1[1].toFixed(1)} L ${p1[0].toFixed(1)} ${p1[1].toFixed(1)} A ${r0.toFixed(1)} ${r0.toFixed(1)} 0 ${large} 0 ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} Z" fill="${palette[j]}" stroke="#fff" stroke-width="${detail?1:.6}"/>`);
+      current=r1;
+    }
+  }
+  if(detail){
+    roseLabels.forEach((label,i)=>{
+      const p=polarPoint(cx,cy,ro+size*.075,roseAngles[i]);
+      parts.push(`<text x="${p[0].toFixed(1)}" y="${(p[1]+size*.012).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.max(8,size*.032).toFixed(1)}" font-weight="700" fill="#344054">${label}</text>`);
+    });
+  }
+  const end=polarPoint(cx,cy,ro*.82,heading), ah=size*(detail?.035:.13), aw=size*(detail?.018:.065);
+  const border=`<circle cx="${cx}" cy="${cy}" r="${Math.max(ri,size*.04).toFixed(1)}" fill="#fff" stroke="#1769aa" stroke-width="${detail?2:1.2}"/>`;
+  const arrow=`<line x1="${cx}" y1="${cy}" x2="${end[0].toFixed(1)}" y2="${end[1].toFixed(1)}" stroke="#1769aa" stroke-width="${detail?2.5:1.6}"/><polygon points="${end[0].toFixed(1)},${end[1].toFixed(1)} ${polarPoint(end[0],end[1],ah,heading+150)[0].toFixed(1)},${polarPoint(end[0],end[1],ah,heading+150)[1].toFixed(1)} ${polarPoint(end[0],end[1],ah,heading-150)[0].toFixed(1)},${polarPoint(end[0],end[1],ah,heading-150)[1].toFixed(1)}" fill="#1769aa"/>`;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${parts.join('')}${border}${arrow}</svg>`;
   return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg);
 }
 function renderMapRoses(rows){
@@ -236,9 +277,9 @@ function selectRosePoint(r,index){
   const arctic=!!r.isArctic;
   const rosePalette=arctic?['#5b21b6','#6d28d9','#7c3aed','#8b5cf6','#a855f7','#c026d3','#d946ef','#db2777','#be185d','#9d174d','#86198f','#7e22ce','#9333ea','#a21caf','#c026d3','#7c3aed']:null;
   destroyRose();
-  const heading=Number.isFinite(r.heading)?r.heading:0;
-  const headingPlugin={id:'vesselHeading',afterDraw(chart){const {ctx,chartArea}=chart;const cx=(chartArea.left+chartArea.right)/2,cy=(chartArea.top+chartArea.bottom)/2;const rr=Math.min(chartArea.right-chartArea.left,chartArea.bottom-chartArea.top)*.42;const a=heading*Math.PI/180;const ex=cx+Math.sin(a)*rr,ey=cy-Math.cos(a)*rr;ctx.save();ctx.strokeStyle='#1769aa';ctx.fillStyle='#1769aa';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ex,ey);ctx.stroke();const ah=9,aw=4;ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-Math.sin(a)*ah+Math.cos(a)*aw,ey+Math.cos(a)*ah+Math.sin(a)*aw);ctx.lineTo(ex-Math.sin(a)*ah-Math.cos(a)*aw,ey+Math.cos(a)*ah-Math.sin(a)*aw);ctx.closePath();ctx.fill();ctx.restore();}};
-  roseChart=new Chart($('roseChart'),{type:'polarArea',plugins:[headingPlugin],data:{labels:roseLabels,datasets:[{data:bins,backgroundColor:roseLabels.map((_,i)=>{const alpha=.28+.52*(bins[i]/maxBin);const c=rosePalette?rosePalette[i]:'#2f80ed'; const rgb=c.match(/#(..)(..)(..)/); const rr=parseInt(rgb[1],16),gg=parseInt(rgb[2],16),bb=parseInt(rgb[3],16); return `rgba(${rr},${gg},${bb},${alpha.toFixed(2)})`}),borderColor:'#fff',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:200},scales:{r:{beginAtZero:true,ticks:{display:false},grid:{circular:true},angleLines:{display:true},pointLabels:{display:true,font:{size:10,weight:'700'}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>{const n=Number(ctx.raw||0),pct=total?100*n/total:0;return `${roseLabels[ctx.dataIndex]}: ${n.toLocaleString()} obs (${pct.toFixed(1)}%)`;},title:()=>`Waves FROM`}}}}});
+  const roseHost=$('roseChart');
+  roseHost.innerHTML=`<img src="${roseSvgData(r,360,true)}" alt="Wave direction and significant wave height distribution rose" style="width:100%;height:100%;object-fit:contain">`;
+  roseChart=roseHost;
   const relCounts={'Head seas':0,'Bow quartering':0,'Beam seas':0,'Stern quartering':0,'Following seas':0};
   bins.forEach((n,i)=>{const cat=relativeCategoryFromAngle(signedAngleDeg(heading,roseAngles[i]));relCounts[cat]+=n;});
   const order=['Head seas','Bow quartering','Beam seas','Stern quartering','Following seas'];
@@ -450,8 +491,8 @@ function stat(a){if(!a.length)return null;a=[...a].filter(Number.isFinite).sort(
 function renderDebug(rows){
   const good=rows.filter(r=>Number.isFinite(r.mean));
   let html=`<div><b>${good.length}/${rows.length}</b> route points with valid Hs. Backend sample counts are full 3-hourly observations used for the statistics.</div>`;
-  html+='<table><thead><tr><th>#</th><th>Dist NM</th><th>Heading</th><th>Mean wave from</th><th>Δθ</th><th>Sea state</th><th>n</th><th>season n</th><th>Mean</th><th>P95</th><th>Max</th><th>Wave source</th></tr></thead><tbody>';
-  rows.forEach((r,i)=>{html+=`<tr title="${String(r.error||'').replace(/"/g,'&quot;')}"><td>${i+1}</td><td>${kmToNm(r.distanceKm).toFixed(0)}</td><td>${Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.waveFrom)?r.waveFrom.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.relativeAngle)?(r.relativeAngle>0?'+':'')+r.relativeAngle.toFixed(0)+'°':'—'}</td><td>${r.seaState||'—'}</td><td>${r.count??'—'}</td><td>${r.seasonCount||'—'}</td><td>${Number.isFinite(r.mean)?r.mean.toFixed(2):'—'}</td><td>${Number.isFinite(r.p95)?r.p95.toFixed(2):'—'}</td><td>${Number.isFinite(r.max)?r.max.toFixed(2):'—'}</td><td>${r.dataSource||'—'}</td></tr>`;});
+  html+='<table><thead><tr><th>#</th><th>Dist NM</th><th>Heading</th><th>Mean wave from</th><th>Δθ</th><th>Sea state</th><th>n</th><th>season n</th><th>Mean</th><th>P95</th><th>Max</th><th>Wave source</th><th>Data status</th></tr></thead><tbody>';
+  rows.forEach((r,i)=>{html+=`<tr title="${String(r.error||'').replace(/"/g,'&quot;')}"><td>${i+1}</td><td>${kmToNm(r.distanceKm).toFixed(0)}</td><td>${Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.waveFrom)?r.waveFrom.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.relativeAngle)?(r.relativeAngle>0?'+':'')+r.relativeAngle.toFixed(0)+'°':'—'}</td><td>${r.seaState||'—'}</td><td>${r.count??'—'}</td><td>${r.seasonCount||'—'}</td><td>${Number.isFinite(r.mean)?r.mean.toFixed(2):'—'}</td><td>${Number.isFinite(r.p95)?r.p95.toFixed(2):'—'}</td><td>${Number.isFinite(r.max)?r.max.toFixed(2):'—'}</td><td>${r.dataSource||'—'}</td><td>${r.iceStatus==='ice_affected'?'Ice affected':(r.iceStatus==='no_wave_data'?'No wave data':'—')}</td></tr>`;});
   html+='</tbody></table>'; $('debug').innerHTML=html;
 }
 $('waves').onclick=async()=>{
@@ -470,15 +511,15 @@ $('waves').onclick=async()=>{
       const heading=headingFor(sm.points,i);
       const waveFrom=Number.isFinite(Number(h.wave_from_deg))?Number(h.wave_from_deg):NaN;
       const relativeAngle=Number.isFinite(waveFrom)?signedAngleDeg(heading,waveFrom):NaN;
-      rows.push({lon:p.lon,lat:p.lat,distanceKm:sm.dist[p.idx],heading,waveFrom,relativeAngle,seaState:Number.isFinite(relativeAngle)?seaStateClass(relativeAngle):'',count:Number(h.count||0),waveCount:Number(h.wave_direction_count||0),waveBins:Array.isArray(h.wave_direction_bins)?h.wave_direction_bins.map(Number):Array(16).fill(0),rawCount:Number(h.raw_count||0),seasonCount:Number(h.season_count||0),seasonName:h.season_name||'',dataSource:h.data_source||'—',isArctic:Boolean(h.is_arctic),mean:Number(h.mean),median:Number(h.median),max:Number(h.max),p95:Number(h.p95),p99:Number(h.p99),error:h.error||''});
+      rows.push({lon:p.lon,lat:p.lat,distanceKm:sm.dist[p.idx],heading,waveFrom,relativeAngle,seaState:Number.isFinite(relativeAngle)?seaStateClass(relativeAngle):'',count:Number(h.count||0),waveCount:Number(h.wave_direction_count||0),waveBins:Array.isArray(h.wave_direction_bins)?h.wave_direction_bins.map(Number):Array(16).fill(0),waveHsBins:Array.isArray(h.wave_direction_hs_bins)?h.wave_direction_hs_bins.map(row=>Array.isArray(row)?row.map(Number):[0,0,0,0,0]):Array.from({length:16},()=>[0,0,0,0,0]),rawCount:Number(h.raw_count||0),seasonCount:Number(h.season_count||0),seasonName:h.season_name||'',dataSource:h.data_source||'—',isArctic:Boolean(h.is_arctic),iceStatus:h.ice_status||'not_checked',iceAffected:Boolean(h.ice_affected),iceMaxFraction:Number(h.ice_max_fraction),iceMeanFraction:Number(h.ice_mean_fraction),iceMaxThickness:Number(h.ice_max_thickness_m),mean:Number(h.mean),median:Number(h.median),max:Number(h.max),p95:Number(h.p95),p99:Number(h.p99),error:h.error||''});
     }
     lastRows=rows;renderDebug(rows);renderCalculationPoints(rows);renderHeadingArrows(rows);renderMapRoses(rows);renderRouteColoring();
     const validRows=rows.filter(r=>Number.isFinite(r.mean));
     if(validRows.length < rows.length){
       const failed=rows.filter(r=>!Number.isFinite(r.mean));
-      const arcticFailed=failed.filter(r=>r.isArctic).length;
+      const arcticFailed=failed.filter(r=>r.isArctic).length; const iceAffected=failed.filter(r=>r.iceStatus==='ice_affected').length; const noWave=failed.filter(r=>r.iceStatus==='no_wave_data').length;
       const firstError=failed.find(r=>r.error)?.error || 'Copernicus returned no valid VHM0 values for some route points.';
-      console.warn('Wave data missing for route points', {failedCount:failed.length, arcticFailed, firstError, failed});
+      console.warn('Wave data missing for route points', {failedCount:failed.length, arcticFailed, iceAffected, noWave, firstError, failed});
     }
     if(!validRows.length){
       const firstError=rows.find(r=>r.error)?.error || 'Copernicus returned no valid VHM0 values.';
@@ -495,4 +536,4 @@ $('waves').onclick=async()=>{
   }catch(e){console.error(e);status(e.message||'Historical Hs calculation failed.',true);}finally{$('waves').disabled=false;}
 };
 function draw(rows){if(chart)chart.destroy();chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>kmToNm(r.distanceKm).toFixed(0)),datasets:[{label:'Mean Hs',data:rows.map(r=>r.mean),borderWidth:2,pointRadius:2,tension:.15},{label:'P95 Hs',data:rows.map(r=>r.p95),borderWidth:1,pointRadius:1,borderDash:[5,5],tension:.15}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance (NM)'}},y:{title:{display:true,text:'Hs (m)'},beginAtZero:true}}}});}
-$('csv').onclick=()=>{const head='lon,lat,distance_nm,heading_deg,wave_mean_from_deg,relative_wave_angle_deg,sea_state,observations,wave_direction_observations,wave_direction_bins_N_to_NNW,wave_source,is_arctic,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.heading,r.waveFrom,r.relativeAngle,r.seaState,r.count,r.waveCount,`\"${(r.waveBins||[]).join('|')}\"`,r.dataSource,r.isArctic,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_17.csv';a.click();};
+$('csv').onclick=()=>{const head='lon,lat,distance_nm,heading_deg,wave_mean_from_deg,relative_wave_angle_deg,sea_state,observations,wave_direction_observations,wave_direction_bins_N_to_NNW,wave_source,is_arctic,ice_status,ice_affected,ice_max_fraction,ice_mean_fraction,ice_max_thickness_m,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.heading,r.waveFrom,r.relativeAngle,r.seaState,r.count,r.waveCount,`\"${(r.waveBins||[]).join('|')}\"`,r.dataSource,r.isArctic,r.iceStatus,r.iceAffected,r.iceMaxFraction,r.iceMeanFraction,r.iceMaxThickness,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_33.csv';a.click();};

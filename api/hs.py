@@ -13,6 +13,14 @@ ARCTIC_MY_DATASET_ID = "cmems_mod_arc_wav_my_3km_PT1H-i"
 ARCTIC_NRT_DATASET_ID = "dataset-wam-arctic-1hr3km-be"
 VARIABLES = ["VHM0", "VMDR"]
 ARCTIC_THRESHOLD_LAT = 63.0
+ICE_DATASET_ID = "cmems_mod_arc_phy_anfc_nextsim_hm"
+ICE_REANALYSIS_DATASET_ID = "cmems_mod_arc_phy_my_nextsim_P1D-m"
+ICE_MIN_LAT = 52.6
+ICE_THRESHOLD = 0.15
+ICE_NRT_START = pd.Timestamp("2019-08-01T00:00:00Z")
+ICE_NRT_END = pd.Timestamp("2099-12-31T23:00:00Z")
+ICE_MY_START = pd.Timestamp("1993-01-01T00:00:00Z")
+ICE_MY_END = pd.Timestamp("2026-05-31T23:59:59Z")
 ARCTIC_MY_START = pd.Timestamp("1964-01-01T00:00:00Z")
 ARCTIC_MY_END = pd.Timestamp("2025-07-31T23:00:00Z")
 ARCTIC_NRT_START = pd.Timestamp("2022-08-01T00:00:00Z")
@@ -79,13 +87,140 @@ def get_wave_dataframe(lon, lat, start, end):
         return df, "Global WAVERYS — Arctic route point", True
     return df, "Global WAVERYS", False
 
+
+def read_ice_dataset(dataset_id, lon, lat, start, end, variables):
+    return copernicusmarine.read_dataframe(
+        dataset_id=dataset_id,
+        variables=variables,
+        minimum_longitude=float(lon),
+        maximum_longitude=float(lon),
+        minimum_latitude=float(lat),
+        maximum_latitude=float(lat),
+        start_datetime=start,
+        end_datetime=end,
+        coordinates_selection_method="nearest",
+        service="timeseries",
+    )
+
+
+def get_ice_status(lon, lat, start, end, season):
+    """Classify a missing-wave point as ice-affected or simply no-wave-data.
+
+    We only call this for points where the wave product returned no usable VHM0.
+    The Arctic sea-ice analysis/forecast dataset provides hourly siconc/sithick
+    from Aug 2019 onward; the Arctic sea-ice reanalysis provides daily siconc
+    from 1993 through May 2026. A 15% concentration threshold is used as the
+    conventional ice-covered threshold.
+    """
+    result = {
+        "ice_status": "not_checked",
+        "ice_affected": False,
+        "ice_source": None,
+        "ice_observation_count": 0,
+        "ice_covered_observation_count": 0,
+        "ice_max_fraction": None,
+        "ice_mean_fraction": None,
+        "ice_error": None,
+    }
+    if float(lat) < ICE_MIN_LAT:
+        result["ice_status"] = "outside_ice_product"
+        return result
+
+    frames = []
+    errors = []
+    # Prefer the current hourly Arctic sea-ice analysis/forecast where the
+    # requested period overlaps it.
+    if end >= ICE_NRT_START and start <= ICE_NRT_END:
+        a = max(start, ICE_NRT_START)
+        b = min(end, ICE_NRT_END)
+        if a <= b:
+            try:
+                frames.append((read_ice_dataset(ICE_DATASET_ID, lon, lat, a, b, ["siconc", "sithick"]), "Arctic sea-ice analysis/forecast"))
+            except Exception as exc:
+                errors.append(f"analysis/forecast: {type(exc).__name__}: {exc}")
+
+    # Fill historical periods not covered by the hourly product with the daily
+    # multi-year sea-ice reanalysis.
+    if end >= ICE_MY_START and start <= ICE_MY_END:
+        a = max(start, ICE_MY_START)
+        b = min(end, ICE_MY_END)
+        if a <= b:
+            try:
+                frames.append((read_ice_dataset(ICE_REANALYSIS_DATASET_ID, lon, lat, a, b, ["siconc", "sithick"]), "Arctic sea-ice reanalysis"))
+            except Exception as exc:
+                errors.append(f"reanalysis: {type(exc).__name__}: {exc}")
+
+    values = []
+    thickness = []
+    for df, source in frames:
+        if df is None or len(df) == 0 or "siconc" not in df.columns:
+            continue
+        local = df.copy()
+        if season in (1, 2, 3, 4):
+            try:
+                if "time" in local.columns:
+                    times = pd.to_datetime(local["time"], utc=True, errors="coerce")
+                else:
+                    idx = local.index
+                    if isinstance(idx, pd.MultiIndex) and "time" in idx.names:
+                        times = pd.Series(pd.to_datetime(idx.get_level_values("time"), utc=True, errors="coerce"), index=local.index)
+                    else:
+                        times = pd.Series(pd.to_datetime(idx, utc=True, errors="coerce"), index=local.index)
+                months = {1:{12,1,2},2:{3,4,5},3:{6,7,8},4:{9,10,11}}[season]
+                local = local.loc[times.dt.month.isin(months).to_numpy()]
+            except Exception as exc:
+                errors.append(f"season filter: {type(exc).__name__}: {exc}")
+                continue
+        for v in pd.to_numeric(local["siconc"], errors="coerce").tolist():
+            try:
+                x=float(v)
+                if math.isfinite(x):
+                    # Some NetCDF conventions expose concentration as percent;
+                    # normalize that to a 0..1 fraction.
+                    if x > 1.0 and x <= 100.0:
+                        x /= 100.0
+                    if 0.0 <= x <= 1.0:
+                        values.append(x)
+            except Exception:
+                pass
+        if "sithick" in local.columns:
+            for v in pd.to_numeric(local["sithick"], errors="coerce").tolist():
+                try:
+                    x=float(v)
+                    if math.isfinite(x) and x >= 0:
+                        thickness.append(x)
+                except Exception:
+                    pass
+
+    if values:
+        covered=sum(1 for x in values if x >= ICE_THRESHOLD)
+        result.update({
+            "ice_status": "ice_affected" if covered else "no_ice_detected",
+            "ice_affected": bool(covered),
+            "ice_observation_count": len(values),
+            "ice_covered_observation_count": covered,
+            "ice_max_fraction": max(values),
+            "ice_mean_fraction": sum(values)/len(values),
+            "ice_source": " + ".join(sorted(set(src for _,src in frames))),
+        })
+        if thickness:
+            result["ice_max_thickness_m"] = max(thickness)
+            result["ice_mean_thickness_m"] = sum(thickness)/len(thickness)
+        return result
+
+    result["ice_status"] = "no_wave_data"
+    if errors:
+        result["ice_error"] = " | ".join(errors)[:1200]
+    return result
+
 def summarize_point(lon, lat, start, end, season):
     is_arctic = float(lat) >= ARCTIC_THRESHOLD_LAT
     try:
         df, data_source, is_arctic = get_wave_dataframe(lon, lat, start, end)
 
         if df is None or len(df) == 0:
-            return {"lon": lon, "lat": lat, "count": 0, "data_source": data_source, "is_arctic": is_arctic, "error": "Copernicus returned an empty dataframe for the selected wave product."}
+            ice = get_ice_status(lon, lat, start, end, season) if is_arctic else {"ice_status":"not_checked","ice_affected":False}
+            return {"lon": lon, "lat": lat, "count": 0, "data_source": data_source, "is_arctic": is_arctic, "error": "Copernicus returned an empty dataframe for the selected wave product.", **ice}
 
         # Optional meteorological season filter. IMPORTANT: the requested
         # historical interval is fetched first, then the same three UTC
@@ -184,7 +319,8 @@ def summarize_point(lon, lat, start, end, season):
                     pass
 
         if not vals:
-            return {"lon": lon, "lat": lat, "data_source": data_source, "is_arctic": is_arctic, "count": 0, "error": "VHM0 contained no finite numeric values after the selected season filter."}
+            ice = get_ice_status(lon, lat, start, end, season) if is_arctic else {"ice_status":"not_checked","ice_affected":False}
+            return {"lon": lon, "lat": lat, "data_source": data_source, "is_arctic": is_arctic, "count": 0, "error": "VHM0 contained no finite numeric values after the selected season filter.", **ice}
 
         result = {
             "lon": lon,
@@ -219,10 +355,28 @@ def summarize_point(lon, lat, start, end, season):
             # Return counts rather than all individual observations to keep the
             # browser response compact while preserving the historical distribution.
             bins = [0] * 16
-            for direction in wave_vals:
-                idx = int(((direction + 11.25) % 360.0) // 22.5)
-                bins[idx] += 1
+            # Directional rose split by significant wave height. Each sector
+            # is radial in proportion to its observation frequency, while the
+            # radial stack shows the Hs classes within that direction.
+            # Hs classes: 0-0.5, 0.5-1, 1-1.5, 1.5-2, >=2 m.
+            hs_direction_bins = [[0] * 5 for _ in range(16)]
+            try:
+                hs_vals = pd.to_numeric(series, errors="coerce").tolist()
+            except Exception:
+                hs_vals = []
+            for direction, hs in zip(wave_series.tolist() if wave_series is not None else [], hs_vals):
+                try:
+                    d = float(direction); h = float(hs)
+                    if not (math.isfinite(d) and 0.0 <= d <= 360.0 and math.isfinite(h) and h >= 0.0):
+                        continue
+                    idx = int(((d % 360.0) + 11.25) // 22.5) % 16
+                    bins[idx] += 1
+                    hidx = 0 if h < 0.5 else 1 if h < 1.0 else 2 if h < 1.5 else 3 if h < 2.0 else 4
+                    hs_direction_bins[idx][hidx] += 1
+                except Exception:
+                    pass
             result["wave_direction_bins"] = bins
+            result["wave_direction_hs_bins"] = hs_direction_bins
         else:
             result["wave_from_deg"] = None
             result["wave_direction_count"] = 0
