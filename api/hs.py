@@ -12,7 +12,7 @@ DATASET_ID = "cmems_mod_glo_wav_my_0.2deg_PT3H-i"
 ARCTIC_MY_DATASET_ID = "cmems_mod_arc_wav_my_3km_PT1H-i"
 ARCTIC_NRT_DATASET_ID = "dataset-wam-arctic-1hr3km-be"
 VARIABLES = ["VHM0", "VMDR"]
-ARCTIC_THRESHOLD_LAT = 41.12
+ARCTIC_THRESHOLD_LAT = 63.0
 ARCTIC_MY_START = pd.Timestamp("1964-01-01T00:00:00Z")
 ARCTIC_MY_END = pd.Timestamp("2025-07-31T23:00:00Z")
 ARCTIC_NRT_START = pd.Timestamp("2022-08-01T00:00:00Z")
@@ -60,7 +60,9 @@ def get_wave_dataframe(lon, lat, start, end):
     """Select the global or Arctic wave product and stitch Arctic products when needed.
 
     The global WAVERYS product is global, but Arctic route points can be masked by sea ice.
-    Copernicus provides a dedicated Arctic wave model over 41.12–89.99°N, with a 3 km grid.
+    Copernicus provides a dedicated Arctic wave model north of 63°N, with a 3 km grid.
+    Points south of 63°N must remain on the global product even when the maritime
+    route itself has Arctic routing enabled.
     For dates through 31 Jul 2025 use the Arctic multi-year hindcast; for newer dates use
     the Arctic analysis/forecast dataset. When a requested interval spans the boundary,
     stitch the two non-overlapping periods together.

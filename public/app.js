@@ -1,18 +1,8 @@
 
 const WORLD_BOUNDS=L.latLngBounds([[-85.05112878,-180],[85.05112878,180]]);
-const map=L.map('map',{worldCopyJump:false,continuousWorld:false,maxBounds:WORLD_BOUNDS,maxBoundsViscosity:1,minZoom:2}).setView([35,0],2);
-
-// Keep the viewport wide enough that Leaflet can display only ONE copy of the
-// world. At lower zooms the world is narrower than the map and tile grids can
-// otherwise appear side-by-side. Recompute after resize.
-function enforceSingleWorldZoom(){
-  const w=Math.max(256,map.getSize().x||256);
-  const required=Math.max(2,Math.ceil(Math.log2(w/256))+1);
-  if(map.getMinZoom()!==required)map.setMinZoom(required);
-  if(map.getZoom()<required)map.setZoom(required,{animate:false});
-}
-setTimeout(enforceSingleWorldZoom,0);
-window.addEventListener('resize',()=>setTimeout(enforceSingleWorldZoom,0));
+// Allow the user to zoom all the way out to a complete planisphere.
+// noWrap + maxBounds prevent repeated copies of the world at the same time.
+const map=L.map('map',{worldCopyJump:false,continuousWorld:false,maxBounds:WORLD_BOUNDS,maxBoundsViscosity:1,minZoom:1}).setView([35,0],2);
 const tileOpts={noWrap:true,bounds:WORLD_BOUNDS,attribution:'© OpenStreetMap contributors'};
 const osmLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',tileOpts);
 const satelliteLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{noWrap:true,bounds:WORLD_BOUNDS,attribution:'Tiles © Esri'});
@@ -20,6 +10,26 @@ const satelliteLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/s
 osmLayer.addTo(map);
 const satelliteWithLabels=L.layerGroup([satelliteLayer,satelliteLabels]);
 L.control.layers({'Standard':osmLayer,'Satellite':satelliteLayer,'Satellite + Labels':satelliteWithLabels},null,{position:'topright',collapsed:true}).addTo(map);
+
+// Compact control to immediately show the entire single-world planisphere.
+const WorldViewControl=L.Control.extend({
+  options:{position:'topright'},
+  onAdd:function(){
+    const div=L.DomUtil.create('div','leaflet-bar leaflet-control world-view-control');
+    const a=L.DomUtil.create('a','',div);
+    a.href='#';
+    a.title='Show entire world';
+    a.setAttribute('aria-label','Show entire world');
+    a.innerHTML='🌍';
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.on(a,'click',function(e){
+      L.DomEvent.stop(e);
+      map.fitBounds(WORLD_BOUNDS,{padding:[8,8],animate:false});
+    });
+    return div;
+  }
+});
+map.addControl(new WorldViewControl());
 
 let routeLayer=null, routeColorLayer=null, originMarker=null, destinationMarker=null, waypointMarkers=[], headingLayer=null, roseMapLayer=null, routeCoords=[], chart=null, roseChart=null, lastRows=[];
 let originPoint=[51.9244,4.4777], destinationPoint=[1.3521,103.8198], waypointPoints=[null,null,null];
@@ -446,6 +456,12 @@ $('waves').onclick=async()=>{
     }
     lastRows=rows;renderDebug(rows);renderHeadingArrows(rows);renderMapRoses(rows);renderRouteColoring();
     const validRows=rows.filter(r=>Number.isFinite(r.mean));
+    if(validRows.length < rows.length){
+      const failed=rows.filter(r=>!Number.isFinite(r.mean));
+      const arcticFailed=failed.filter(r=>r.isArctic).length;
+      const firstError=failed.find(r=>r.error)?.error || 'Copernicus returned no valid VHM0 values for some route points.';
+      console.warn('Wave data missing for route points', {failedCount:failed.length, arcticFailed, firstError, failed});
+    }
     if(!validRows.length){
       const firstError=rows.find(r=>r.error)?.error || 'Copernicus returned no valid VHM0 values.';
       throw new Error(firstError);
