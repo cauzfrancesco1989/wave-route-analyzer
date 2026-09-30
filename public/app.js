@@ -1,6 +1,18 @@
 
 const WORLD_BOUNDS=L.latLngBounds([[-85.05112878,-180],[85.05112878,180]]);
-const map=L.map('map',{worldCopyJump:false,maxBounds:WORLD_BOUNDS,maxBoundsViscosity:1}).setView([35,0],2);
+const map=L.map('map',{worldCopyJump:false,continuousWorld:false,maxBounds:WORLD_BOUNDS,maxBoundsViscosity:1,minZoom:2}).setView([35,0],2);
+
+// Keep the viewport wide enough that Leaflet can display only ONE copy of the
+// world. At lower zooms the world is narrower than the map and tile grids can
+// otherwise appear side-by-side. Recompute after resize.
+function enforceSingleWorldZoom(){
+  const w=Math.max(256,map.getSize().x||256);
+  const required=Math.max(2,Math.ceil(Math.log2(w/256))+1);
+  if(map.getMinZoom()!==required)map.setMinZoom(required);
+  if(map.getZoom()<required)map.setZoom(required,{animate:false});
+}
+setTimeout(enforceSingleWorldZoom,0);
+window.addEventListener('resize',()=>setTimeout(enforceSingleWorldZoom,0));
 const tileOpts={noWrap:true,bounds:WORLD_BOUNDS,attribution:'© OpenStreetMap contributors'};
 const osmLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',tileOpts);
 const satelliteLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{noWrap:true,bounds:WORLD_BOUNDS,attribution:'Tiles © Esri'});
@@ -311,7 +323,7 @@ $('route').onclick=async()=>{
     if(routeLayer)map.removeLayer(routeLayer);
     routeLayer=L.geoJSON({type:'Feature',geometry:r.geometry},{style:{weight:4,color:'#1769aa',opacity:.8}}).addTo(map); clearRouteColorLayer(); renderRouteColoring();
     updateMarker('origin');updateMarker('destination');for(let i=1;i<=3;i++)updateWaypointMarker(i);
-    map.fitBounds(routeLayer.getBounds(),{padding:[20,20]});
+    fitRouteSingleWorld(r.geometry);
     $('dist').textContent=kmToNm(r.totalDistanceKm).toFixed(0)+' NM';
     $('npts').textContent=r.geometry.type==='MultiLineString'?r.geometry.coordinates.reduce((n,x)=>n+x.length,0):r.geometry.coordinates.length;
     $('restrictions').textContent=r.restrictions.length?r.restrictions.join(', '):'None';
@@ -320,6 +332,43 @@ $('route').onclick=async()=>{
   }catch(e){console.error(e);status(e.message||'Route calculation failed.',true);}finally{$('route').disabled=false;}
 };
 
+function fitRouteSingleWorld(geometry){
+  const groups=geometry.type==='MultiLineString'?geometry.coordinates:[geometry.coordinates];
+  const pts=[];
+  for(const seg of groups)for(const p of seg||[])if(Array.isArray(p)&&p.length>=2&&Number.isFinite(p[0])&&Number.isFinite(p[1]))pts.push(p);
+  if(!pts.length)return;
+
+  // Find the smallest longitude interval containing the route. This avoids
+  // treating +179° and -179° as 358° apart when the route crosses the
+  // antimeridian.
+  const lons=pts.map(p=>((p[0]+180)%360+360)%360-180).sort((a,b)=>a-b);
+  let bestStart=lons[0],bestSpan=360;
+  for(let i=0;i<lons.length;i++){
+    const a=lons[i], b=i===lons.length-1?lons[0]+360:lons[i+1];
+    const gap=b-a;
+    const span=360-gap;
+    if(span<bestSpan){bestSpan=span;bestStart=b%360; if(bestStart>180)bestStart-=360;}
+  }
+  const end=bestStart+bestSpan;
+  const centerLon=((bestStart+end)/2+540)%360-180;
+  const minLat=Math.max(-85.05112878,Math.min(...pts.map(p=>p[1])));
+  const maxLat=Math.min(85.05112878,Math.max(...pts.map(p=>p[1])));
+
+  if(bestSpan>180){
+    map.setView([Math.max(-80,Math.min(80,(minLat+maxLat)/2)),centerLon],Math.max(2,map.getMinZoom()),{animate:false});
+    return;
+  }
+
+  // For normal routes Leaflet's bounds are safe. For an antimeridian route,
+  // use the calculated center and a conservative zoom so the route remains
+  // on the single displayed world.
+  if(bestStart<-180||end>180||Math.abs(end-bestStart)>170){
+    const z=Math.max(2,map.getMinZoom(),bestSpan<60?3:2);
+    map.setView([Math.max(-80,Math.min(80,(minLat+maxLat)/2)),centerLon],z,{animate:false});
+  }else{
+    map.fitBounds(L.latLngBounds([[minLat,bestStart],[maxLat,end]]),{padding:[20,20],maxZoom:7});
+  }
+}
 function sampleLine(coords,count){
   // Preserve MultiLineString breaks returned by searoute-ts. In particular,
   // an antimeridian-split Arctic route must NEVER be interpolated from +180°
