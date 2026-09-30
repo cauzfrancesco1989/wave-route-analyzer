@@ -9,7 +9,13 @@ import copernicusmarine
 import pandas as pd
 
 DATASET_ID = "cmems_mod_glo_wav_my_0.2deg_PT3H-i"
+ARCTIC_MY_DATASET_ID = "cmems_mod_arc_wav_my_3km_PT1H-i"
+ARCTIC_NRT_DATASET_ID = "dataset-wam-arctic-1hr3km-be"
 VARIABLES = ["VHM0", "VMDR"]
+ARCTIC_THRESHOLD_LAT = 53.0
+ARCTIC_MY_START = pd.Timestamp("1964-01-01T00:00:00Z")
+ARCTIC_MY_END = pd.Timestamp("2025-07-31T23:00:00Z")
+ARCTIC_NRT_START = pd.Timestamp("2022-08-01T00:00:00Z")
 MAX_POINTS = 100
 MAX_WORKERS = 4
 
@@ -26,23 +32,77 @@ def percentile(values, q):
         return xs[int(k)]
     return xs[f] + (xs[c] - xs[f]) * (k - f)
 
+def read_point_dataset(dataset_id, lon, lat, start, end):
+    return copernicusmarine.read_dataframe(
+        dataset_id=dataset_id,
+        variables=VARIABLES,
+        minimum_longitude=float(lon),
+        maximum_longitude=float(lon),
+        minimum_latitude=float(lat),
+        maximum_latitude=float(lat),
+        start_datetime=start,
+        end_datetime=end,
+        coordinates_selection_method="nearest",
+        service="timeseries",
+    )
+
+
+def get_wave_dataframe(lon, lat, start, end):
+    """Select the global or Arctic wave product and stitch Arctic products when needed.
+
+    The global WAVERYS product is global, but Arctic route points can be masked by sea ice.
+    Copernicus provides a dedicated Arctic wave model north of 53N, with a 3 km grid.
+    For dates through 31 Jul 2025 use the Arctic multi-year hindcast; for newer dates use
+    the Arctic analysis/forecast dataset. When a requested interval spans the boundary,
+    stitch the two non-overlapping periods together.
+    """
+    if float(lat) < ARCTIC_THRESHOLD_LAT:
+        df = read_point_dataset(DATASET_ID, lon, lat, start, end)
+        return df, "Global WAVERYS"
+
+    req_start = pd.Timestamp(start)
+    req_end = pd.Timestamp(end)
+    frames = []
+    sources = []
+
+    # Older Arctic history: 1964-07-31.
+    my_start = max(req_start, ARCTIC_MY_START)
+    my_end = min(req_end, ARCTIC_MY_END)
+    if my_start <= my_end:
+        df_my = read_point_dataset(ARCTIC_MY_DATASET_ID, lon, lat, my_start.to_pydatetime(), my_end.to_pydatetime())
+        if df_my is not None and len(df_my):
+            frames.append(df_my)
+            sources.append("Arctic multi-year hindcast")
+
+    # Recent Arctic history / analysis: 2022-08-01 to current.
+    nrt_start = max(req_start, ARCTIC_NRT_START, ARCTIC_MY_END + pd.Timedelta(hours=1))
+    if nrt_start <= req_end:
+        df_nrt = read_point_dataset(ARCTIC_NRT_DATASET_ID, lon, lat, nrt_start.to_pydatetime(), req_end.to_pydatetime())
+        if df_nrt is not None and len(df_nrt):
+            frames.append(df_nrt)
+            sources.append("Arctic analysis/forecast")
+
+    if not frames:
+        return pd.DataFrame(), "Arctic wave products returned no data"
+
+    df = pd.concat(frames, axis=0)
+    # The stitched ranges are intentionally non-overlapping, but de-duplicate defensively.
+    try:
+        if isinstance(df.index, pd.DatetimeIndex):
+            df = df[~df.index.duplicated(keep="first")].sort_index()
+        elif "time" in df.columns:
+            df = df.drop_duplicates(subset=["time"]).sort_values("time")
+    except Exception:
+        pass
+    return df, " + ".join(dict.fromkeys(sources))
+
+
 def summarize_point(lon, lat, start, end, season):
     try:
-        df = copernicusmarine.read_dataframe(
-            dataset_id=DATASET_ID,
-            variables=VARIABLES,
-            minimum_longitude=float(lon),
-            maximum_longitude=float(lon),
-            minimum_latitude=float(lat),
-            maximum_latitude=float(lat),
-            start_datetime=start,
-            end_datetime=end,
-            coordinates_selection_method="nearest",
-            service="timeseries",
-        )
+        df, data_source = get_wave_dataframe(lon, lat, start, end)
 
         if df is None or len(df) == 0:
-            return {"lon": lon, "lat": lat, "count": 0, "error": "Copernicus returned an empty dataframe."}
+            return {"lon": lon, "lat": lat, "count": 0, "data_source": data_source, "error": "Copernicus returned an empty dataframe for the selected wave product."}
 
         # Optional meteorological season filter. IMPORTANT: the requested
         # historical interval is fetched first, then the same three UTC
@@ -114,7 +174,7 @@ def summarize_point(lon, lat, start, end, season):
         else:
             numeric = [c for c in df.columns if c not in ("time", "latitude", "longitude", "depth")]
             if not numeric:
-                return {"lon": lon, "lat": lat, "count": 0, "error": f"VHM0 column not found. Columns: {list(df.columns)}"}
+                return {"lon": lon, "lat": lat, "data_source": data_source, "count": 0, "error": f"VHM0 column not found. Columns: {list(df.columns)}"}
             series = df[numeric[0]].copy()
 
         wave_series = df["VMDR"].copy() if "VMDR" in df.columns else None
@@ -142,11 +202,12 @@ def summarize_point(lon, lat, start, end, season):
                     pass
 
         if not vals:
-            return {"lon": lon, "lat": lat, "count": 0, "error": "VHM0 contained no finite numeric values after the selected season filter."}
+            return {"lon": lon, "lat": lat, "data_source": data_source, "count": 0, "error": "VHM0 contained no finite numeric values after the selected season filter."}
 
         result = {
             "lon": lon,
             "lat": lat,
+            "data_source": data_source,
             "count": len(vals),
             "raw_count": raw_count,
             "season_count": filtered_count,

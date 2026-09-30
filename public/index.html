@@ -53,7 +53,7 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
 
 </head>
 <body>
-<header><div><h1>Wave Route Analyzer — V3.21</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-right"><label class="color-toggle" title="Choose how the route is coloured"><span>Route colouring</span><select id="routeColorMode" class="route-color-select"><option value="none">No colouring (single colour)</option><option value="beaufort">Colour by Beaufort (Wind)</option><option value="douglas">Colour by Douglas (Hs)</option></select></label><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></div></header>
+<header><div><h1>Wave Route Analyzer — V3.22</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-right"><label class="color-toggle" title="Choose how the route is coloured"><span>Route colouring</span><select id="routeColorMode" class="route-color-select"><option value="none">No colouring (single colour)</option><option value="beaufort">Colour by Beaufort (Wind)</option><option value="douglas">Colour by Douglas (Hs)</option></select></label><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></div></header>
 <div class="app">
 <aside id="sidebar">
   <label>Route points</label>
@@ -133,7 +133,7 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
     </div>
   </div>
   <details class="card"><summary><b>Copernicus diagnostic</b></summary><div id="debug" class="debug">No wave request yet.</div></details>
-  <p class="small"><b>Routing:</b> searoute-ts / Eurostat 2025 MARNET maritime network. <b>Arctic:</b> Northwest/Northeast Passages are blocked by default; enable “Allow Arctic passages” to permit them. No sea-ice or seasonal navigability model is applied. <b>Heading:</b> local route bearing, clockwise from North. <b>Wave data:</b> Copernicus Marine Global Ocean Waves Reanalysis, variable <b>VHM0</b> (spectral significant wave height), 0.2° grid, 3-hourly. This is a research/planning tool, not certified navigation.</p>
+  <p class="small"><b>Routing:</b> searoute-ts / Eurostat 2025 MARNET maritime network. <b>Arctic:</b> Northwest/Northeast Passages are blocked by default; enable “Allow Arctic passages” to permit them. No sea-ice or seasonal navigability model is applied. <b>Heading:</b> local route bearing, clockwise from North. <b>Wave data:</b> Copernicus Marine Global Ocean Waves Reanalysis outside the Arctic; north of 53°N the app uses the dedicated Arctic wave products (3 km, hourly) when applicable. Both provide <b>VHM0</b> and <b>VMDR</b>. This is a research/planning tool, not certified navigation.</p>
 </aside>
 <div id="resizer" class="resizer" title="Drag to resize the control panel"></div>
 <div id="map"><div id="hsLegend" class="hs-legend" hidden></div></div>
@@ -486,8 +486,8 @@ function stat(a){if(!a.length)return null;a=[...a].filter(Number.isFinite).sort(
 function renderDebug(rows){
   const good=rows.filter(r=>Number.isFinite(r.mean));
   let html=`<div><b>${good.length}/${rows.length}</b> route points with valid Hs. Backend sample counts are full 3-hourly observations used for the statistics.</div>`;
-  html+='<table><thead><tr><th>#</th><th>Dist NM</th><th>Heading</th><th>Mean wave from</th><th>Δθ</th><th>Sea state</th><th>n</th><th>season n</th><th>Mean</th><th>P95</th><th>Max</th></tr></thead><tbody>';
-  rows.forEach((r,i)=>{html+=`<tr title="${String(r.error||'').replace(/"/g,'&quot;')}"><td>${i+1}</td><td>${kmToNm(r.distanceKm).toFixed(0)}</td><td>${Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.waveFrom)?r.waveFrom.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.relativeAngle)?(r.relativeAngle>0?'+':'')+r.relativeAngle.toFixed(0)+'°':'—'}</td><td>${r.seaState||'—'}</td><td>${r.count??'—'}</td><td>${r.seasonCount||'—'}</td><td>${Number.isFinite(r.mean)?r.mean.toFixed(2):'—'}</td><td>${Number.isFinite(r.p95)?r.p95.toFixed(2):'—'}</td><td>${Number.isFinite(r.max)?r.max.toFixed(2):'—'}</td></tr>`;});
+  html+='<table><thead><tr><th>#</th><th>Dist NM</th><th>Heading</th><th>Mean wave from</th><th>Δθ</th><th>Sea state</th><th>n</th><th>season n</th><th>Mean</th><th>P95</th><th>Max</th><th>Wave source</th></tr></thead><tbody>';
+  rows.forEach((r,i)=>{html+=`<tr title="${String(r.error||'').replace(/"/g,'&quot;')}"><td>${i+1}</td><td>${kmToNm(r.distanceKm).toFixed(0)}</td><td>${Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.waveFrom)?r.waveFrom.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.relativeAngle)?(r.relativeAngle>0?'+':'')+r.relativeAngle.toFixed(0)+'°':'—'}</td><td>${r.seaState||'—'}</td><td>${r.count??'—'}</td><td>${r.seasonCount||'—'}</td><td>${Number.isFinite(r.mean)?r.mean.toFixed(2):'—'}</td><td>${Number.isFinite(r.p95)?r.p95.toFixed(2):'—'}</td><td>${Number.isFinite(r.max)?r.max.toFixed(2):'—'}</td><td>${r.dataSource||'—'}</td></tr>`;});
   html+='</tbody></table>'; $('debug').innerHTML=html;
 }
 $('waves').onclick=async()=>{
@@ -506,7 +506,7 @@ $('waves').onclick=async()=>{
       const heading=headingFor(sm.points,i);
       const waveFrom=Number.isFinite(Number(h.wave_from_deg))?Number(h.wave_from_deg):NaN;
       const relativeAngle=Number.isFinite(waveFrom)?signedAngleDeg(heading,waveFrom):NaN;
-      rows.push({lon:p.lon,lat:p.lat,distanceKm:sm.dist[p.idx],heading,waveFrom,relativeAngle,seaState:Number.isFinite(relativeAngle)?seaStateClass(relativeAngle):'',count:Number(h.count||0),waveCount:Number(h.wave_direction_count||0),waveBins:Array.isArray(h.wave_direction_bins)?h.wave_direction_bins.map(Number):Array(16).fill(0),rawCount:Number(h.raw_count||0),seasonCount:Number(h.season_count||0),seasonName:h.season_name||'',mean:Number(h.mean),median:Number(h.median),max:Number(h.max),p95:Number(h.p95),p99:Number(h.p99),error:h.error||''});
+      rows.push({lon:p.lon,lat:p.lat,distanceKm:sm.dist[p.idx],heading,waveFrom,relativeAngle,seaState:Number.isFinite(relativeAngle)?seaStateClass(relativeAngle):'',count:Number(h.count||0),waveCount:Number(h.wave_direction_count||0),waveBins:Array.isArray(h.wave_direction_bins)?h.wave_direction_bins.map(Number):Array(16).fill(0),rawCount:Number(h.raw_count||0),seasonCount:Number(h.season_count||0),seasonName:h.season_name||'',dataSource:h.data_source||'—',mean:Number(h.mean),median:Number(h.median),max:Number(h.max),p95:Number(h.p95),p99:Number(h.p99),error:h.error||''});
     }
     lastRows=rows;renderDebug(rows);renderHeadingArrows(rows);renderMapRoses(rows);renderRouteColoring();
     const validRows=rows.filter(r=>Number.isFinite(r.mean));
@@ -521,7 +521,7 @@ $('waves').onclick=async()=>{
     $('p95').textContent=sP95? sP95.p95.toFixed(2)+' m':'—';
     $('p99').textContent=sP99? sP99.p99.toFixed(2)+' m':'—';
     draw(rows);$('csv').disabled=false;const seasonInfo=season==='all'?'All seasons':`${seasonLabel} — same months retained in every year of the selected period`;
-    status(`Completed ${rows.length} sampled points. Historical Hs + wave-direction distribution (VMDR) from Copernicus Marine. Click a vessel symbol to open the directional rose. ${seasonInfo}.`);
+    status(`Completed ${rows.length} sampled points. Historical Hs + wave-direction distribution (VMDR) from Copernicus Marine. Arctic points use the dedicated Arctic wave product when applicable. Click a vessel symbol to open the directional rose. ${seasonInfo}.`);
   }catch(e){console.error(e);status(e.message||'Historical Hs calculation failed.',true);}finally{$('waves').disabled=false;}
 };
 function draw(rows){if(chart)chart.destroy();chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>kmToNm(r.distanceKm).toFixed(0)),datasets:[{label:'Mean Hs',data:rows.map(r=>r.mean),borderWidth:2,pointRadius:2,tension:.15},{label:'P95 Hs',data:rows.map(r=>r.p95),borderWidth:1,pointRadius:1,borderDash:[5,5],tension:.15}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance (NM)'}},y:{title:{display:true,text:'Hs (m)'},beginAtZero:true}}}});}
