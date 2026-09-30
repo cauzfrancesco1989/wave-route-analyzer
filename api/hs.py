@@ -104,9 +104,10 @@ def read_ice_dataset(dataset_id, lon, lat, start, end, variables):
 
 
 def get_ice_status(lon, lat, start, end, season=None, month_filter=None):
-    """Classify a missing-wave point as ice-affected or simply no-wave-data.
+    """Retrieve Arctic sea-ice concentration and thickness for a route point.
 
-    We only call this for points where the wave product returned no usable VHM0.
+    Ice information is independent from wave-data availability and is returned
+    whenever the point lies inside the Arctic ice-product domain.
     The Arctic sea-ice analysis/forecast dataset provides hourly siconc/sithick
     from Aug 2019 onward; the Arctic sea-ice reanalysis provides daily siconc
     from 1993 through May 2026. A 15% concentration threshold is used as the
@@ -388,6 +389,9 @@ def summarize_point(lon, lat, start, end, season, month_filter=None):
             result["wave_direction_count"] = 0
             result["wave_direction_bins"] = [0] * 16
 
+        # Retrieve ice information independently of wave-data availability.
+        ice = get_ice_status(lon, lat, start, end, season, month_filter) if is_arctic else {"ice_status":"not_checked","ice_affected":False}
+        result.update(ice)
         return result
     except Exception as exc:
         return {"lon": lon, "lat": lat, "count": 0, "error": f"{type(exc).__name__}: {exc}"}

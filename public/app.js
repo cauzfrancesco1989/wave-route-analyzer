@@ -164,8 +164,8 @@ function renderCalculationPoints(rows){
     const hasWave=Array.isArray(r.waveBins)&&r.waveBins.some(v=>Number.isFinite(v)&&Number(v)>0);
     const statusColor=r.iceStatus==='ice_affected'?'#f59e0b':(r.iceStatus==='no_wave_data'?'#6b7280':(r.isArctic?'#7c3aed':'#1769aa')); const color=statusColor;
     const marker=L.circleMarker([r.lat,r.lon],{radius:hasWave?3.5:3,weight:1.5,color:'#fff',fillColor:color,fillOpacity:.95,interactive:true,zIndexOffset:180});
-    marker.bindTooltip(`<b>Calculation point ${i+1}</b><br>Distance: ${kmToNm(r.distanceKm).toFixed(0)} NM<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}${r.isArctic?'<br><span style=\"color:#7c3aed\"><b>Arctic region</b></span>':''}`,{direction:'top',sticky:true});
-    marker.on('click',()=>selectRosePoint(r,i));
+    const iceInfo=r.isArctic?`<br>Ice concentration: ${Number.isFinite(r.iceMeanFraction)?(r.iceMeanFraction*100).toFixed(0)+'%':'—'} mean / ${Number.isFinite(r.iceMaxFraction)?(r.iceMaxFraction*100).toFixed(0)+'%':'—'} max<br>Ice thickness: ${Number.isFinite(r.iceMeanThickness)?r.iceMeanThickness.toFixed(2)+' m':'—'} mean / ${Number.isFinite(r.iceMaxThickness)?r.iceMaxThickness.toFixed(2)+' m':'—'} max`:'';
+    marker.bindTooltip(`<b>Calculation point ${i+1}</b><br>Distance: ${kmToNm(r.distanceKm).toFixed(0)} NM<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}${r.isArctic?'<br><span style="color:#7c3aed"><b>Arctic region</b></span>':''}${iceInfo}`,{direction:'top',sticky:true});
     marker.addTo(calcPointLayer);
   });
 }
@@ -180,6 +180,40 @@ function hsRosePalette(arctic){
   return arctic
     ? ['#f5e8ff','#d8b4fe','#b06cff','#8b3fd1','#6420a8','#3b0f73']
     : ['#fffbd8','#b9e3d1','#63c6c8','#3f8fd8','#2456a6','#14356f'];
+}
+function roseSvgMarkup(r,size=360,detail=true){
+  const bins=Array.isArray(r.waveBins)?r.waveBins.map(Number):Array(16).fill(0);
+  const stacked=Array.isArray(r.waveHsBins)&&r.waveHsBins.length===16
+    ? r.waveHsBins.map(row=>Array.isArray(row)?row.map(Number):[0,0,0,0,0,0])
+    : bins.map(n=>[0,0,0,0,0,Number.isFinite(n)?n:0]);
+  const totals=bins.map((n,i)=>Number.isFinite(n)&&n>=0?n:stacked[i].reduce((a,b)=>a+(Number.isFinite(b)&&b>=0?b:0),0));
+  const total=totals.reduce((a,b)=>a+b,0);
+  if(!total)return '';
+  const arctic=!!r.isArctic, palette=hsRosePalette(arctic);
+  const heading=Number.isFinite(r.heading)?r.heading:0;
+  const cx=size/2,cy=size/2,ro=size*.34,ri=size*.055,base=size*.07;
+  const maxRadius=Math.max(1,...totals),parts=[];
+  for(const f of [.25,.5,.75,1]){const rr=base+(ro-base)*f;parts.push(`<circle cx="${cx}" cy="${cy}" r="${rr.toFixed(1)}" fill="none" stroke="#cfd8df" stroke-width=".8"/>`);}
+  const hsLabels=['0–1 m','1–2 m','2–3 m','3–4 m','4–5 m','>5 m'];
+  for(let i=0;i<16;i++){
+    const n=totals[i]; if(n<=0)continue;
+    const rOuter=base+(ro-base)*(n/maxRadius),a0=roseAngles[i]-10.6,a1=roseAngles[i]+10.6,stack=stacked[i],stackTotal=stack.reduce((a,b)=>a+(Number.isFinite(b)&&b>0?b:0),0)||n;
+    let current=ri;
+    for(let j=0;j<6;j++){
+      const count=Number.isFinite(stack[j])&&stack[j]>0?stack[j]:0;if(!count)continue;
+      const r0=current,r1=current+(rOuter-ri)*(count/stackTotal);
+      const p0=polarPoint(cx,cy,r0,a0),p1=polarPoint(cx,cy,r0,a1),q1=polarPoint(cx,cy,r1,a1),q0=polarPoint(cx,cy,r1,a0);
+      const sectorPct=n/total*100,hsPct=count/stackTotal*100;
+      const tooltip=`${roseLabels[i]} (${a0<0?a0+360:a0.toFixed(1)}°–${a1.toFixed(1)}°)\nDirection: ${sectorPct.toFixed(1)}% (${Math.round(n)} obs)\nHs ${hsLabels[j]}: ${hsPct.toFixed(1)}% of this direction (${Math.round(count)} obs)`;
+      parts.push(`<path d="M ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} L ${q0[0].toFixed(1)} ${q0[1].toFixed(1)} A ${r1.toFixed(1)} ${r1.toFixed(1)} 0 0 1 ${q1[0].toFixed(1)} ${q1[1].toFixed(1)} L ${p1[0].toFixed(1)} ${p1[1].toFixed(1)} A ${r0.toFixed(1)} ${r0.toFixed(1)} 0 0 0 ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} Z" fill="${palette[j]}" stroke="#fff" stroke-width="1"><title>${tooltip.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</title></path>`);
+      current=r1;
+    }
+  }
+  roseLabels.forEach((label,i)=>{const p=polarPoint(cx,cy,ro+size*.075,roseAngles[i]);parts.push(`<text x="${p[0].toFixed(1)}" y="${(p[1]+size*.012).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${Math.max(8,size*.032).toFixed(1)}" font-weight="700" fill="#344054">${label}</text>`);});
+  const end=polarPoint(cx,cy,ro*.82,heading),ah=size*.035,aw=size*.018;
+  parts.push(`<circle cx="${cx}" cy="${cy}" r="${Math.max(ri,size*.04).toFixed(1)}" fill="#fff" stroke="#1769aa" stroke-width="2"/>`);
+  parts.push(`<line x1="${cx}" y1="${cy}" x2="${end[0].toFixed(1)}" y2="${end[1].toFixed(1)}" stroke="#1769aa" stroke-width="2.5"/>`);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="100%" height="100%" role="img" aria-label="Wave direction rose">${parts.join('')}</svg>`;
 }
 function roseSvgData(r,size=48,detail=false){
   const bins=Array.isArray(r.waveBins)?r.waveBins.map(Number):Array(16).fill(0);
@@ -286,7 +320,8 @@ function selectRosePoint(r,index){
   const rosePalette=arctic?['#5b21b6','#6d28d9','#7c3aed','#8b5cf6','#a855f7','#c026d3','#d946ef','#db2777','#be185d','#9d174d','#86198f','#7e22ce','#9333ea','#a21caf','#c026d3','#7c3aed']:null;
   destroyRose();
   const roseHost=$('roseChart');
-  roseHost.innerHTML=`<img src="${roseSvgData(r,360,true)}" alt="Wave direction and significant wave height distribution rose" style="width:100%;height:100%;object-fit:contain">`;
+  roseHost.innerHTML=roseSvgMarkup(r,360,true);
+  roseHost.querySelectorAll('path').forEach(path=>{path.style.cursor='help';path.addEventListener('mouseenter',()=>{path.style.opacity='.78';});path.addEventListener('mouseleave',()=>{path.style.opacity='1';});});
   roseChart=roseHost;
   renderRoseHsLegend(!!r.isArctic);
   const relCounts={'Head seas':0,'Bow quartering':0,'Beam seas':0,'Stern quartering':0,'Following seas':0};
@@ -500,8 +535,8 @@ function stat(a){if(!a.length)return null;a=[...a].filter(Number.isFinite).sort(
 function renderDebug(rows){
   const good=rows.filter(r=>Number.isFinite(r.mean));
   let html=`<div><b>${good.length}/${rows.length}</b> route points with valid Hs. Backend sample counts are full 3-hourly observations used for the statistics.</div>`;
-  html+='<table><thead><tr><th>#</th><th>Dist NM</th><th>Heading</th><th>Mean wave from</th><th>Δθ</th><th>Sea state</th><th>n</th><th>season n</th><th>Mean</th><th>P95</th><th>Max</th><th>Wave source</th><th>Data status</th></tr></thead><tbody>';
-  rows.forEach((r,i)=>{html+=`<tr title="${String(r.error||'').replace(/"/g,'&quot;')}"><td>${i+1}</td><td>${kmToNm(r.distanceKm).toFixed(0)}</td><td>${Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.waveFrom)?r.waveFrom.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.relativeAngle)?(r.relativeAngle>0?'+':'')+r.relativeAngle.toFixed(0)+'°':'—'}</td><td>${r.seaState||'—'}</td><td>${r.count??'—'}</td><td>${r.seasonCount||'—'}</td><td>${Number.isFinite(r.mean)?r.mean.toFixed(2):'—'}</td><td>${Number.isFinite(r.p95)?r.p95.toFixed(2):'—'}</td><td>${Number.isFinite(r.max)?r.max.toFixed(2):'—'}</td><td>${r.dataSource||'—'}</td><td>${r.iceStatus==='ice_affected'?'Ice affected':(r.iceStatus==='no_wave_data'?'No wave data':'—')}</td></tr>`;});
+  html+='<table><thead><tr><th>#</th><th>Dist NM</th><th>Heading</th><th>Mean wave from</th><th>Δθ</th><th>Sea state</th><th>n</th><th>season n</th><th>Mean</th><th>P95</th><th>Max</th><th>Wave source</th><th>Ice conc. mean</th><th>Ice conc. max</th><th>Ice thickness mean</th><th>Ice thickness max</th><th>Data status</th></tr></thead><tbody>';
+  rows.forEach((r,i)=>{html+=`<tr title="${String(r.error||'').replace(/"/g,'&quot;')}"><td>${i+1}</td><td>${kmToNm(r.distanceKm).toFixed(0)}</td><td>${Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.waveFrom)?r.waveFrom.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.relativeAngle)?(r.relativeAngle>0?'+':'')+r.relativeAngle.toFixed(0)+'°':'—'}</td><td>${r.seaState||'—'}</td><td>${r.count??'—'}</td><td>${r.seasonCount||'—'}</td><td>${Number.isFinite(r.mean)?r.mean.toFixed(2):'—'}</td><td>${Number.isFinite(r.p95)?r.p95.toFixed(2):'—'}</td><td>${Number.isFinite(r.max)?r.max.toFixed(2):'—'}</td><td>${r.dataSource||'—'}</td><td>${Number.isFinite(r.iceMeanFraction)?(r.iceMeanFraction*100).toFixed(1)+'%':'—'}</td><td>${Number.isFinite(r.iceMaxFraction)?(r.iceMaxFraction*100).toFixed(1)+'%':'—'}</td><td>${Number.isFinite(r.iceMeanThickness)?r.iceMeanThickness.toFixed(2)+' m':'—'}</td><td>${Number.isFinite(r.iceMaxThickness)?r.iceMaxThickness.toFixed(2)+' m':'—'}</td><td>${r.iceStatus==='ice_affected'?'Ice affected':(r.iceStatus==='no_wave_data'?'No wave data':(r.isArctic&&r.iceStatus==='no_ice_detected'?'No ice detected':'—'))}</td></tr>`;});
   html+='</tbody></table>'; $('debug').innerHTML=html;
 }
 $('clearMonths').onclick=()=>{document.querySelectorAll('.month-check').forEach(c=>c.checked=false);};
@@ -527,7 +562,7 @@ $('waves').onclick=async()=>{
       const heading=headingFor(sm.points,i);
       const waveFrom=Number.isFinite(Number(h.wave_from_deg))?Number(h.wave_from_deg):NaN;
       const relativeAngle=Number.isFinite(waveFrom)?signedAngleDeg(heading,waveFrom):NaN;
-      rows.push({lon:p.lon,lat:p.lat,distanceKm:sm.dist[p.idx],heading,waveFrom,relativeAngle,seaState:Number.isFinite(relativeAngle)?seaStateClass(relativeAngle):'',count:Number(h.count||0),waveCount:Number(h.wave_direction_count||0),waveBins:Array.isArray(h.wave_direction_bins)?h.wave_direction_bins.map(Number):Array(16).fill(0),waveHsBins:Array.isArray(h.wave_direction_hs_bins)?h.wave_direction_hs_bins.map(row=>Array.isArray(row)?row.map(Number):[0,0,0,0,0,0]):Array.from({length:16},()=>[0,0,0,0,0,0]),rawCount:Number(h.raw_count||0),seasonCount:Number(h.season_count||0),seasonName:h.season_name||'',dataSource:h.data_source||'—',isArctic:Boolean(h.is_arctic),iceStatus:h.ice_status||'not_checked',iceAffected:Boolean(h.ice_affected),iceMaxFraction:Number(h.ice_max_fraction),iceMeanFraction:Number(h.ice_mean_fraction),iceMaxThickness:Number(h.ice_max_thickness_m),mean:Number(h.mean),median:Number(h.median),max:Number(h.max),p95:Number(h.p95),p99:Number(h.p99),error:h.error||''});
+      rows.push({lon:p.lon,lat:p.lat,distanceKm:sm.dist[p.idx],heading,waveFrom,relativeAngle,seaState:Number.isFinite(relativeAngle)?seaStateClass(relativeAngle):'',count:Number(h.count||0),waveCount:Number(h.wave_direction_count||0),waveBins:Array.isArray(h.wave_direction_bins)?h.wave_direction_bins.map(Number):Array(16).fill(0),waveHsBins:Array.isArray(h.wave_direction_hs_bins)?h.wave_direction_hs_bins.map(row=>Array.isArray(row)?row.map(Number):[0,0,0,0,0,0]):Array.from({length:16},()=>[0,0,0,0,0,0]),rawCount:Number(h.raw_count||0),seasonCount:Number(h.season_count||0),seasonName:h.season_name||'',dataSource:h.data_source||'—',isArctic:Boolean(h.is_arctic),iceStatus:h.ice_status||'not_checked',iceAffected:Boolean(h.ice_affected),iceMaxFraction:Number(h.ice_max_fraction),iceMeanFraction:Number(h.ice_mean_fraction),iceMaxThickness:Number(h.ice_max_thickness_m),iceMeanThickness:Number(h.ice_mean_thickness_m),iceSource:h.ice_source||'',iceObservationCount:Number(h.ice_observation_count||0),mean:Number(h.mean),median:Number(h.median),max:Number(h.max),p95:Number(h.p95),p99:Number(h.p99),error:h.error||''});
     }
     lastRows=rows;renderDebug(rows);renderCalculationPoints(rows);renderHeadingArrows(rows);renderMapRoses(rows);renderRouteColoring();
     const validRows=rows.filter(r=>Number.isFinite(r.mean));
@@ -552,4 +587,4 @@ $('waves').onclick=async()=>{
   }catch(e){console.error(e);status(e.message||'Historical Hs calculation failed.',true);}finally{$('waves').disabled=false;}
 };
 function draw(rows){if(chart)chart.destroy();chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>kmToNm(r.distanceKm).toFixed(0)),datasets:[{label:'Mean Hs',data:rows.map(r=>r.mean),borderWidth:2,pointRadius:2,tension:.15},{label:'P95 Hs',data:rows.map(r=>r.p95),borderWidth:1,pointRadius:1,borderDash:[5,5],tension:.15}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance (NM)'}},y:{title:{display:true,text:'Hs (m)'},beginAtZero:true}}}});}
-$('csv').onclick=()=>{const head='lon,lat,distance_nm,heading_deg,wave_mean_from_deg,relative_wave_angle_deg,sea_state,observations,wave_direction_observations,wave_direction_bins_N_to_NNW,wave_source,is_arctic,ice_status,ice_affected,ice_max_fraction,ice_mean_fraction,ice_max_thickness_m,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.heading,r.waveFrom,r.relativeAngle,r.seaState,r.count,r.waveCount,`\"${(r.waveBins||[]).join('|')}\"`,r.dataSource,r.isArctic,r.iceStatus,r.iceAffected,r.iceMaxFraction,r.iceMeanFraction,r.iceMaxThickness,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_33.csv';a.click();};
+$('csv').onclick=()=>{const head='lon,lat,distance_nm,heading_deg,wave_mean_from_deg,relative_wave_angle_deg,sea_state,observations,wave_direction_observations,wave_direction_bins_N_to_NNW,wave_source,is_arctic,ice_status,ice_affected,ice_source,ice_observations,ice_max_fraction,ice_mean_fraction,ice_max_thickness_m,ice_mean_thickness_m,mean_hs_m,median_hs_m,max_hs_m,p95_hs_m,p99_hs_m\n';const body=lastRows.map(r=>[r.lon,r.lat,kmToNm(r.distanceKm),r.heading,r.waveFrom,r.relativeAngle,r.seaState,r.count,r.waveCount,`\"${(r.waveBins||[]).join('|')}\"`,r.dataSource,r.isArctic,r.iceStatus,r.iceAffected,`"${String(r.iceSource||'').replace(/"/g,'""')}"`,r.iceObservationCount,r.iceMaxFraction,r.iceMeanFraction,r.iceMaxThickness,r.iceMeanThickness,r.mean,r.median,r.max,r.p95,r.p99].join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));a.download='wave_route_v3_39.csv';a.click();};
