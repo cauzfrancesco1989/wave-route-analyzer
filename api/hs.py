@@ -244,10 +244,12 @@ def summarize_point(lon, lat, start, end, season, month_filter=None):
                 4: ({9, 10, 11}, "Season 4 — Sep / Oct / Nov"),
             }
             months, season_name = month_map[season]
+
+        # Apply the selected calendar months in exactly the same way whether
+        # they came from a predefined season or from the manual month picker.
+        # This keeps Season 1 and Dec+Jan+Feb mathematically identical.
+        if months is not None:
             try:
-                # Copernicus may expose time either as a normal column, a
-                # DatetimeIndex, or a MultiIndex level. Resolve that explicitly
-                # and NEVER silently continue without applying the month filter.
                 times = None
                 if "time" in df.columns:
                     candidate = pd.to_datetime(df["time"], utc=True, errors="coerce")
@@ -275,19 +277,18 @@ def summarize_point(lon, lat, start, end, season, month_filter=None):
                 if selected_count == 0:
                     return {
                         "lon": lon, "lat": lat, "count": 0, "raw_count": raw_count, "is_arctic": is_arctic,
-                        "season_count": 0, "season": season, "season_name": season_name,
+                        "season_count": 0, "season": season if season in (1,2,3,4) else "all", "season_name": season_name,
                         "season_months": sorted(months),
                         "error": f"No observations in {season_name} within the requested historical period."
                     }
 
-                # Filter the dataframe itself so VHM0 and VMDR remain perfectly aligned.
                 df = df.loc[month_mask.to_numpy()]
             except Exception as exc:
                 return {
                     "lon": lon, "lat": lat, "count": 0, "raw_count": raw_count, "is_arctic": is_arctic,
-                    "season_count": 0, "season": season, "season_name": season_name,
+                    "season_count": 0, "season": season if season in (1,2,3,4) else "all", "season_name": season_name,
                     "season_months": sorted(months),
-                    "error": f"Could not apply the seasonal month filter: {type(exc).__name__}: {exc}"
+                    "error": f"Could not apply the calendar month filter: {type(exc).__name__}: {exc}"
                 }
 
         filtered_count = len(df) if (selected_months or season in (1, 2, 3, 4)) else len(df)
