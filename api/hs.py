@@ -12,7 +12,7 @@ DATASET_ID = "cmems_mod_glo_wav_my_0.2deg_PT3H-i"
 ARCTIC_MY_DATASET_ID = "cmems_mod_arc_wav_my_3km_PT1H-i"
 ARCTIC_NRT_DATASET_ID = "dataset-wam-arctic-1hr3km-be"
 VARIABLES = ["VHM0", "VMDR"]
-ARCTIC_THRESHOLD_LAT = 53.0
+ARCTIC_THRESHOLD_LAT = 41.12
 ARCTIC_MY_START = pd.Timestamp("1964-01-01T00:00:00Z")
 ARCTIC_MY_END = pd.Timestamp("2025-07-31T23:00:00Z")
 ARCTIC_NRT_START = pd.Timestamp("2022-08-01T00:00:00Z")
@@ -47,18 +47,27 @@ def read_point_dataset(dataset_id, lon, lat, start, end):
     )
 
 
+def has_valid_vhm0(df):
+    if df is None or len(df) == 0:
+        return False
+    if "VHM0" not in df.columns:
+        return False
+    vals = pd.to_numeric(df["VHM0"], errors="coerce")
+    return bool(((vals >= 0.0) & vals.notna()).any())
+
+
 def get_wave_dataframe(lon, lat, start, end):
     """Select the global or Arctic wave product and stitch Arctic products when needed.
 
     The global WAVERYS product is global, but Arctic route points can be masked by sea ice.
-    Copernicus provides a dedicated Arctic wave model north of 53N, with a 3 km grid.
+    Copernicus provides a dedicated Arctic wave model over 41.12–89.99°N, with a 3 km grid.
     For dates through 31 Jul 2025 use the Arctic multi-year hindcast; for newer dates use
     the Arctic analysis/forecast dataset. When a requested interval spans the boundary,
     stitch the two non-overlapping periods together.
     """
     if float(lat) < ARCTIC_THRESHOLD_LAT:
         df = read_point_dataset(DATASET_ID, lon, lat, start, end)
-        return df, "Global WAVERYS"
+        return df, "Global WAVERYS", False
 
     req_start = pd.Timestamp(start)
     req_end = pd.Timestamp(end)
@@ -70,7 +79,7 @@ def get_wave_dataframe(lon, lat, start, end):
     my_end = min(req_end, ARCTIC_MY_END)
     if my_start <= my_end:
         df_my = read_point_dataset(ARCTIC_MY_DATASET_ID, lon, lat, my_start.to_pydatetime(), my_end.to_pydatetime())
-        if df_my is not None and len(df_my):
+        if df_my is not None and len(df_my) and has_valid_vhm0(df_my):
             frames.append(df_my)
             sources.append("Arctic multi-year hindcast")
 
@@ -78,12 +87,23 @@ def get_wave_dataframe(lon, lat, start, end):
     nrt_start = max(req_start, ARCTIC_NRT_START, ARCTIC_MY_END + pd.Timedelta(hours=1))
     if nrt_start <= req_end:
         df_nrt = read_point_dataset(ARCTIC_NRT_DATASET_ID, lon, lat, nrt_start.to_pydatetime(), req_end.to_pydatetime())
-        if df_nrt is not None and len(df_nrt):
+        if df_nrt is not None and len(df_nrt) and has_valid_vhm0(df_nrt):
             frames.append(df_nrt)
             sources.append("Arctic analysis/forecast")
 
     if not frames:
-        return pd.DataFrame(), "Arctic wave products returned no data"
+        # The dedicated Arctic products are the primary source for Arctic points.
+        # If they contain no valid time series at the exact grid point (for example
+        # because the point is masked by sea ice), make one explicit fallback query
+        # to the global product so the route point is not silently lost. The result
+        # remains flagged as an Arctic point and the diagnostic identifies the fallback.
+        try:
+            df_global = read_point_dataset(DATASET_ID, lon, lat, start, end)
+            if df_global is not None and len(df_global):
+                return df_global, "Arctic point — Global WAVERYS fallback", True
+        except Exception:
+            pass
+        return pd.DataFrame(), "Arctic wave products returned no data", True
 
     df = pd.concat(frames, axis=0)
     # The stitched ranges are intentionally non-overlapping, but de-duplicate defensively.
@@ -94,15 +114,16 @@ def get_wave_dataframe(lon, lat, start, end):
             df = df.drop_duplicates(subset=["time"]).sort_values("time")
     except Exception:
         pass
-    return df, " + ".join(dict.fromkeys(sources))
+    return df, " + ".join(dict.fromkeys(sources)), True
 
 
 def summarize_point(lon, lat, start, end, season):
+    is_arctic = float(lat) >= ARCTIC_THRESHOLD_LAT
     try:
-        df, data_source = get_wave_dataframe(lon, lat, start, end)
+        df, data_source, is_arctic = get_wave_dataframe(lon, lat, start, end)
 
         if df is None or len(df) == 0:
-            return {"lon": lon, "lat": lat, "count": 0, "data_source": data_source, "error": "Copernicus returned an empty dataframe for the selected wave product."}
+            return {"lon": lon, "lat": lat, "count": 0, "data_source": data_source, "is_arctic": is_arctic, "error": "Copernicus returned an empty dataframe for the selected wave product."}
 
         # Optional meteorological season filter. IMPORTANT: the requested
         # historical interval is fetched first, then the same three UTC
@@ -149,7 +170,7 @@ def summarize_point(lon, lat, start, end, season):
                 selected_count = int(month_mask.sum())
                 if selected_count == 0:
                     return {
-                        "lon": lon, "lat": lat, "count": 0, "raw_count": raw_count,
+                        "lon": lon, "lat": lat, "count": 0, "raw_count": raw_count, "is_arctic": is_arctic,
                         "season_count": 0, "season": season, "season_name": season_name,
                         "season_months": sorted(months),
                         "error": f"No observations in {season_name} within the requested historical period."
@@ -159,7 +180,7 @@ def summarize_point(lon, lat, start, end, season):
                 df = df.loc[month_mask.to_numpy()]
             except Exception as exc:
                 return {
-                    "lon": lon, "lat": lat, "count": 0, "raw_count": raw_count,
+                    "lon": lon, "lat": lat, "count": 0, "raw_count": raw_count, "is_arctic": is_arctic,
                     "season_count": 0, "season": season, "season_name": season_name,
                     "season_months": sorted(months),
                     "error": f"Could not apply the seasonal month filter: {type(exc).__name__}: {exc}"
@@ -174,40 +195,40 @@ def summarize_point(lon, lat, start, end, season):
         else:
             numeric = [c for c in df.columns if c not in ("time", "latitude", "longitude", "depth")]
             if not numeric:
-                return {"lon": lon, "lat": lat, "data_source": data_source, "count": 0, "error": f"VHM0 column not found. Columns: {list(df.columns)}"}
+                return {"lon": lon, "lat": lat, "data_source": data_source, "is_arctic": is_arctic, "count": 0, "error": f"VHM0 column not found. Columns: {list(df.columns)}"}
             series = df[numeric[0]].copy()
 
         wave_series = df["VMDR"].copy() if "VMDR" in df.columns else None
 
-        # Keep only finite Hs values. VMDR is kept aligned with the same rows.
+        # Keep Hs and VMDR independent: a missing VMDR observation must not
+        # discard an otherwise valid VHM0 value. This is particularly important
+        # in Arctic points affected by sea-ice masking.
         vals = []
         wave_vals = []
+        for h in series.tolist():
+            try:
+                hv = float(h)
+                if math.isfinite(hv) and hv >= 0.0:
+                    vals.append(hv)
+            except Exception:
+                pass
         if wave_series is not None:
-            for h, w in zip(series.tolist(), wave_series.tolist()):
+            for w in wave_series.tolist():
                 try:
-                    hv = float(h)
                     wv = float(w)
-                    if math.isfinite(hv) and math.isfinite(wv) and 0.0 <= wv <= 360.0:
-                        vals.append(hv)
+                    if math.isfinite(wv) and 0.0 <= wv <= 360.0:
                         wave_vals.append(wv % 360.0)
-                except Exception:
-                    pass
-        else:
-            for x in series.tolist():
-                try:
-                    v = float(x)
-                    if math.isfinite(v):
-                        vals.append(v)
                 except Exception:
                     pass
 
         if not vals:
-            return {"lon": lon, "lat": lat, "data_source": data_source, "count": 0, "error": "VHM0 contained no finite numeric values after the selected season filter."}
+            return {"lon": lon, "lat": lat, "data_source": data_source, "is_arctic": is_arctic, "count": 0, "error": "VHM0 contained no finite numeric values after the selected season filter."}
 
         result = {
             "lon": lon,
             "lat": lat,
             "data_source": data_source,
+            "is_arctic": is_arctic,
             "count": len(vals),
             "raw_count": raw_count,
             "season_count": filtered_count,
