@@ -164,7 +164,7 @@ function renderCalculationPoints(rows){
     const hasWave=Array.isArray(r.waveBins)&&r.waveBins.some(v=>Number.isFinite(v)&&Number(v)>0);
     const statusColor=r.iceStatus==='ice_affected'?'#f59e0b':(r.iceStatus==='no_wave_data'?'#6b7280':(r.isArctic?'#7c3aed':'#1769aa')); const color=statusColor;
     const marker=L.circleMarker([r.lat,r.lon],{radius:hasWave?3.5:3,weight:1.5,color:'#fff',fillColor:color,fillOpacity:.95,interactive:true,zIndexOffset:180});
-    marker.bindTooltip(`<b>Calculation point ${i+1}</b><br>Distance: ${kmToNm(r.distanceKm).toFixed(0)} NM<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}${r.isArctic?'<br><span style=\"color:#7c3aed\"><b>Arctic point</b></span>':''}`,{direction:'top',sticky:true});
+    marker.bindTooltip(`<b>Calculation point ${i+1}</b><br>Distance: ${kmToNm(r.distanceKm).toFixed(0)} NM<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}${r.isArctic?'<br><span style=\"color:#7c3aed\"><b>Arctic region</b></span>':''}`,{direction:'top',sticky:true});
     marker.on('click',()=>selectRosePoint(r,i));
     marker.addTo(calcPointLayer);
   });
@@ -244,7 +244,7 @@ function renderMapRoses(rows){
     if(!Array.isArray(r.waveBins)||!r.waveBins.some(v=>Number.isFinite(v)&&Number(v)>0))return;
     const icon=L.divIcon({className:'',html:`<div class="map-rose-icon"><img src="${roseSvgData(r,72)}" alt="Wave direction rose"></div>`,iconSize:[72,72],iconAnchor:[36,36]});
     const marker=L.marker([r.lat,r.lon],{icon,interactive:true,zIndexOffset:250});
-    marker.bindTooltip(`<b>Route point ${i+1}</b><br>Vessel heading: ${Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—'}<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}<br>${r.isArctic?'<span style="color:#7c3aed"><b>Arctic wave product</b></span><br>':''}<span style="color:#1769aa"><b>Click to inspect direction distribution</b></span>`,{direction:'top',sticky:true});
+    marker.bindTooltip(`<b>Route point ${i+1}</b><br>Vessel heading: ${Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—'}<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}<br>${r.isArctic?'<span style="color:#7c3aed"><b>Arctic region</b></span><br>':''}<span style="color:#1769aa"><b>Click to inspect direction distribution</b></span>`,{direction:'top',sticky:true});
     marker.on('click',()=>selectRosePoint(r,i));
     marker.addTo(roseMapLayer);
   });
@@ -487,8 +487,8 @@ function sampleLine(coords,count){
   }
   return {points,dist};
 }
-async function fetchHs(points,start,end,season){
-  const r=await fetch('/api/hs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({points:points.map(p=>({lon:Number(p.lon),lat:Number(p.lat)})),start:start.toISOString(),end:end.toISOString(),season})});
+async function fetchHs(points,start,end,season,months){
+  const r=await fetch('/api/hs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({points:points.map(p=>({lon:Number(p.lon),lat:Number(p.lat)})),start:start.toISOString(),end:end.toISOString(),season,months})});
   const text=await r.text();let j={};try{j=JSON.parse(text)}catch(e){}
   if(!r.ok)throw new Error(j.error||`Wave API HTTP ${r.status}`);
   if(!Array.isArray(j.points))throw new Error('Copernicus API returned no point results.');
@@ -504,15 +504,22 @@ function renderDebug(rows){
   rows.forEach((r,i)=>{html+=`<tr title="${String(r.error||'').replace(/"/g,'&quot;')}"><td>${i+1}</td><td>${kmToNm(r.distanceKm).toFixed(0)}</td><td>${Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.waveFrom)?r.waveFrom.toFixed(0)+'°':'—'}</td><td>${Number.isFinite(r.relativeAngle)?(r.relativeAngle>0?'+':'')+r.relativeAngle.toFixed(0)+'°':'—'}</td><td>${r.seaState||'—'}</td><td>${r.count??'—'}</td><td>${r.seasonCount||'—'}</td><td>${Number.isFinite(r.mean)?r.mean.toFixed(2):'—'}</td><td>${Number.isFinite(r.p95)?r.p95.toFixed(2):'—'}</td><td>${Number.isFinite(r.max)?r.max.toFixed(2):'—'}</td><td>${r.dataSource||'—'}</td><td>${r.iceStatus==='ice_affected'?'Ice affected':(r.iceStatus==='no_wave_data'?'No wave data':'—')}</td></tr>`;});
   html+='</tbody></table>'; $('debug').innerHTML=html;
 }
+$('clearMonths').onclick=()=>{document.querySelectorAll('.month-check').forEach(c=>c.checked=false);};
+document.querySelectorAll('.month-check').forEach(c=>c.addEventListener('change',()=>{if(c.checked)$('season').value='all';}));
+$('season').addEventListener('change',()=>{if($('season').value!=='all')document.querySelectorAll('.month-check').forEach(c=>c.checked=false);});
+
 $('waves').onclick=async()=>{
   if(!routeCoords.length)return;$('waves').disabled=true;$('csv').disabled=true;status('Sampling the route and requesting historical wave data...');
   try{
     const sm=sampleLine(routeCoords,Number($('sampleCount').value)),{start,end}=dates($('period').value);
     const selected=sm.points.map((p,idx)=>({idx,lon:p[0],lat:p[1]}));
     const season=$('season').value;
+    const selectedMonths=[...document.querySelectorAll('.month-check:checked')].map(x=>Number(x.value));
     const seasonLabel=$('season').selectedOptions[0].textContent;
-    status(`Requesting Copernicus VHM0 for ${selected.length} route points (${seasonLabel})...`);
-    const response=await fetchHs(selected,start,end,season),results=response.points;
+    const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const filterLabel=selectedMonths.length?`Months: ${selectedMonths.sort((a,b)=>a-b).map(m=>monthNames[m-1]).join(', ')}`:seasonLabel;
+    status(`Requesting Copernicus VHM0 for ${selected.length} route points (${filterLabel})...`);
+    const response=await fetchHs(selected,start,end,season,selectedMonths),results=response.points;
     if(results.length!==selected.length)throw new Error(`Copernicus returned ${results.length} points for ${selected.length} requested points.`);
     const rows=[];
     for(let i=0;i<selected.length;i++){
@@ -540,7 +547,7 @@ $('waves').onclick=async()=>{
     $('max').textContent=sMax? sMax.max.toFixed(2)+' m':'—';
     $('p95').textContent=sP95? sP95.p95.toFixed(2)+' m':'—';
     $('p99').textContent=sP99? sP99.p99.toFixed(2)+' m':'—';
-    draw(rows);$('csv').disabled=false;const seasonInfo=season==='all'?'All seasons':`${seasonLabel} — same months retained in every year of the selected period`;
+    draw(rows);$('csv').disabled=false;const seasonInfo=selectedMonths.length?`Selected months: ${selectedMonths.sort((a,b)=>a-b).map(m=>monthNames[m-1]).join(', ')} — same months retained in every year of the selected period`:(season==='all'?'All seasons':`${seasonLabel} — same months retained in every year of the selected period`);
     status(`Completed ${rows.length} sampled points. Historical Hs + wave-direction distribution (VMDR) from Copernicus Marine. Arctic route points use the global WAVERYS point series; Arctic status is retained for map/rose visualization. Click a vessel symbol to open the directional rose. ${seasonInfo}.`);
   }catch(e){console.error(e);status(e.message||'Historical Hs calculation failed.',true);}finally{$('waves').disabled=false;}
 };

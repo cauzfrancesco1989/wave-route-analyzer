@@ -103,7 +103,7 @@ def read_ice_dataset(dataset_id, lon, lat, start, end, variables):
     )
 
 
-def get_ice_status(lon, lat, start, end, season):
+def get_ice_status(lon, lat, start, end, season=None, month_filter=None):
     """Classify a missing-wave point as ice-affected or simply no-wave-data.
 
     We only call this for points where the wave product returned no usable VHM0.
@@ -156,7 +156,8 @@ def get_ice_status(lon, lat, start, end, season):
         if df is None or len(df) == 0 or "siconc" not in df.columns:
             continue
         local = df.copy()
-        if season in (1, 2, 3, 4):
+        selected_months = set(int(m) for m in (month_filter or []) if int(m) in range(1,13))
+        if selected_months or season in (1, 2, 3, 4):
             try:
                 if "time" in local.columns:
                     times = pd.to_datetime(local["time"], utc=True, errors="coerce")
@@ -166,7 +167,7 @@ def get_ice_status(lon, lat, start, end, season):
                         times = pd.Series(pd.to_datetime(idx.get_level_values("time"), utc=True, errors="coerce"), index=local.index)
                     else:
                         times = pd.Series(pd.to_datetime(idx, utc=True, errors="coerce"), index=local.index)
-                months = {1:{12,1,2},2:{3,4,5},3:{6,7,8},4:{9,10,11}}[season]
+                months = selected_months if selected_months else {1:{12,1,2},2:{3,4,5},3:{6,7,8},4:{9,10,11}}[season]
                 local = local.loc[times.dt.month.isin(months).to_numpy()]
             except Exception as exc:
                 errors.append(f"season filter: {type(exc).__name__}: {exc}")
@@ -213,13 +214,13 @@ def get_ice_status(lon, lat, start, end, season):
         result["ice_error"] = " | ".join(errors)[:1200]
     return result
 
-def summarize_point(lon, lat, start, end, season):
+def summarize_point(lon, lat, start, end, season, month_filter=None):
     is_arctic = float(lat) >= ARCTIC_THRESHOLD_LAT
     try:
         df, data_source, is_arctic = get_wave_dataframe(lon, lat, start, end)
 
         if df is None or len(df) == 0:
-            ice = get_ice_status(lon, lat, start, end, season) if is_arctic else {"ice_status":"not_checked","ice_affected":False}
+            ice = get_ice_status(lon, lat, start, end, season, month_filter) if is_arctic else {"ice_status":"not_checked","ice_affected":False}
             return {"lon": lon, "lat": lat, "count": 0, "data_source": data_source, "is_arctic": is_arctic, "error": "Copernicus returned an empty dataframe for the selected wave product.", **ice}
 
         # Optional meteorological season filter. IMPORTANT: the requested
@@ -229,7 +230,12 @@ def summarize_point(lon, lat, start, end, season):
         raw_count = len(df)
         season_name = "All seasons"
         months = None
-        if season in (1, 2, 3, 4):
+        selected_months = set(int(m) for m in (month_filter or []) if int(m) in range(1,13))
+        if selected_months:
+            months = selected_months
+            month_names = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"}
+            season_name = "Selected months — " + ", ".join(month_names[m] for m in sorted(months))
+        elif season in (1, 2, 3, 4):
             month_map = {
                 1: ({12, 1, 2}, "Season 1 — Dec / Jan / Feb"),
                 2: ({3, 4, 5}, "Season 2 — Mar / Apr / May"),
@@ -283,7 +289,7 @@ def summarize_point(lon, lat, start, end, season):
                     "error": f"Could not apply the seasonal month filter: {type(exc).__name__}: {exc}"
                 }
 
-        filtered_count = len(df) if season in (1, 2, 3, 4) else len(df)
+        filtered_count = len(df) if (selected_months or season in (1, 2, 3, 4)) else len(df)
 
         if "VHM0" in df.columns:
             series = df["VHM0"].copy()
@@ -319,7 +325,7 @@ def summarize_point(lon, lat, start, end, season):
                     pass
 
         if not vals:
-            ice = get_ice_status(lon, lat, start, end, season) if is_arctic else {"ice_status":"not_checked","ice_affected":False}
+            ice = get_ice_status(lon, lat, start, end, season, month_filter) if is_arctic else {"ice_status":"not_checked","ice_affected":False}
             return {"lon": lon, "lat": lat, "data_source": data_source, "is_arctic": is_arctic, "count": 0, "error": "VHM0 contained no finite numeric values after the selected season filter.", **ice}
 
         result = {
@@ -332,7 +338,7 @@ def summarize_point(lon, lat, start, end, season):
             "season_count": filtered_count,
             "season": season if season in (1, 2, 3, 4) else "all",
             "season_name": season_name,
-            "season_months": sorted(months) if season in (1, 2, 3, 4) else "all",
+            "season_months": sorted(months) if (selected_months or season in (1, 2, 3, 4)) else "all",
             "mean": sum(vals) / len(vals),
             "median": percentile(vals, 0.50),
             "max": max(vals),
@@ -427,6 +433,14 @@ class handler(BaseHTTPRequestHandler):
             season = None if season_raw in (None, "", "all") else int(season_raw)
             if season not in (None, 1, 2, 3, 4):
                 raise ValueError("Season must be all, 1, 2, 3, or 4.")
+            month_filter = payload.get("months", []) or []
+            if not isinstance(month_filter, list):
+                raise ValueError("Months must be a list of calendar month numbers.")
+            month_filter = sorted(set(int(m) for m in month_filter))
+            if any(m < 1 or m > 12 for m in month_filter):
+                raise ValueError("Month numbers must be between 1 and 12.")
+            if month_filter:
+                season = None
             if end <= start:
                 raise ValueError("End date must be after start date.")
             if not os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME") or not os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD"):
@@ -434,12 +448,12 @@ class handler(BaseHTTPRequestHandler):
 
             results = [None] * len(points)
             with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-                futures = {pool.submit(summarize_point, float(p["lon"]), float(p["lat"]), start, end, season): i for i, p in enumerate(points)}
+                futures = {pool.submit(summarize_point, float(p["lon"]), float(p["lat"]), start, end, season, month_filter): i for i, p in enumerate(points)}
                 for future in as_completed(futures):
                     results[futures[future]] = future.result()
 
             failures = [r for r in results if not r or not math.isfinite(float(r.get("mean", float("nan"))))]
-            self._send(200, {"dataset": DATASET_ID, "variables": VARIABLES, "season": season if season is not None else "all", "points": results, "valid_points": len(results) - len(failures), "failed_points": len(failures)})
+            self._send(200, {"dataset": DATASET_ID, "variables": VARIABLES, "season": season if season is not None else "all", "months": month_filter, "points": results, "valid_points": len(results) - len(failures), "failed_points": len(failures)})
         except Exception as e:
             self._send(502, {"error": str(e)})
 
