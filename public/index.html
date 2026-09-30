@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wave Route Analyzer V3.17</title>
+<title>Wave Route Analyzer V3.20</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -11,16 +11,15 @@
 :root{--bg:#eef2f5;--panel:#fff;--ink:#17202a;--muted:#667085;--line:#d9e0e6;--accent:#1769aa;--ok:#067647;--bad:#b42318}
 *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--ink)}
 header{height:62px;background:#102a43;color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between}header h1{font-size:19px;margin:0}header span{font-size:12px;opacity:.75}
-.header-right{display:flex;align-items:center;gap:12px}.color-toggle{display:flex;align-items:center;gap:8px;margin:0;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.color-toggle input{position:absolute;opacity:0;width:1px;height:1px}.toggle-slider{position:relative;width:42px;height:22px;border-radius:999px;background:#52616b;border:1px solid rgba(255,255,255,.35);transition:.18s}.toggle-slider::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.18s;box-shadow:0 1px 2px rgba(0,0,0,.25)}.color-toggle input:checked + .toggle-slider{background:#1e9e62}.color-toggle input:checked + .toggle-slider::after{transform:translateX(20px)}.hs-legend{position:absolute;left:12px;top:12px;z-index:900;background:rgba(255,255,255,.95);border:1px solid #d6dbe1;border-radius:8px;padding:9px 10px;box-shadow:0 2px 10px rgba(0,0,0,.14);font-size:10px;color:#17202a;min-width:112px}.hs-legend-title{font-weight:800;font-size:11px;margin-bottom:6px}.hs-legend-note{margin-top:7px;padding-top:6px;border-top:1px solid #e1e5ea;color:#667085;font-size:9px;line-height:1.35}.hs-legend-row{display:flex;align-items:center;gap:6px;line-height:1.55}.hs-swatch{width:18px;height:9px;border-radius:2px;border:1px solid rgba(0,0,0,.12)}
+.header-right{display:flex;align-items:center;gap:12px}.color-toggle{display:flex;align-items:center;gap:8px;margin:0;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.color-toggle input{position:absolute;opacity:0;width:1px;height:1px}.toggle-slider{position:relative;width:42px;height:22px;border-radius:999px;background:#52616b;border:1px solid rgba(255,255,255,.35);transition:.18s}.route-color-select{width:auto;min-width:245px;padding:6px 28px 6px 9px;border:1px solid rgba(255,255,255,.45);background:#fff;color:#102a43;font-size:12px;font-weight:700}.toggle-slider::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.18s;box-shadow:0 1px 2px rgba(0,0,0,.25)}.color-toggle input:checked + .toggle-slider{background:#1e9e62}.color-toggle input:checked + .toggle-slider::after{transform:translateX(20px)}.hs-legend{position:absolute;left:12px;top:12px;z-index:900;background:rgba(255,255,255,.95);border:1px solid #d6dbe1;border-radius:8px;padding:9px 10px;box-shadow:0 2px 10px rgba(0,0,0,.14);font-size:10px;color:#17202a;min-width:112px}.hs-legend-title{font-weight:800;font-size:11px;margin-bottom:6px}.hs-legend-note{margin-top:7px;padding-top:6px;border-top:1px solid #e1e5ea;color:#667085;font-size:9px;line-height:1.35}.hs-legend-row{display:flex;align-items:center;gap:6px;line-height:1.55}.hs-swatch{width:18px;height:9px;border-radius:2px;border:1px solid rgba(0,0,0,.12)}
 .app{display:grid;grid-template-columns:minmax(280px,360px) 7px minmax(400px,1fr);height:calc(100vh - 62px)}
 aside{background:var(--panel);padding:15px;overflow:auto;border-right:1px solid var(--line)}#map{height:100%}.leaflet-container.pick-mode{cursor:crosshair!important}.leaflet-container.pick-mode .leaflet-interactive{cursor:crosshair!important}.resizer{background:#d7dee5;cursor:col-resize;position:relative;z-index:20}.resizer::after{content:"";position:absolute;left:2px;top:50%;width:3px;height:52px;transform:translateY(-50%);border-radius:3px;background:#9aa9b5}.resizer:hover,.resizer.dragging{background:#b9c7d2}.header-logo{height:42px;min-width:118px;padding:4px 9px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center}.header-logo img{display:block;max-height:34px;max-width:112px;width:auto;height:auto}
 label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,select,button{width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:6px;background:white;font:inherit}button{border:0;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-top:10px}button.secondary{background:#52616b}button.ghost{background:#fff;color:var(--accent);border:1px solid #9bbbd5}button.active{outline:2px solid #f59e0b;outline-offset:1px}button:disabled{opacity:.45;cursor:not-allowed}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.card{margin-top:13px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#fafbfc}.metric{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #edf0f2;font-size:12px}.metric:last-child{border:0}
 #status{font-size:11px;line-height:1.4;margin-top:10px;color:var(--muted)}.chartbox{height:250px;margin-top:8px}.small{font-size:10px;color:var(--muted);line-height:1.35}
 .maptools{display:grid;grid-template-columns:1fr 1fr;gap:6px}.waypoint{margin-top:7px;padding:8px;border:1px solid #e4e8ec;border-radius:7px;background:#fafbfc}.waypoint b{font-size:11px}.waypoint button{margin-top:6px}.maptools button{margin-top:0}.pickhelp{font-size:10px;color:var(--muted);margin-top:6px}.debug{font-size:10px;max-height:220px;overflow:auto;margin-top:7px;background:#fff;border:1px solid #e6e9ec;border-radius:6px;padding:7px}.debug table{width:100%;border-collapse:collapse}.debug th,.debug td{padding:3px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}.debug th:first-child,.debug td:first-child{text-align:left}
-.boat-icon{width:22px;height:42px;position:relative;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
-.boat-icon::before{content:"";position:absolute;left:4px;top:1px;width:14px;height:39px;background:#fff;border:2px solid #102a43;border-radius:50% 50% 32% 32% / 62% 62% 28% 28%;clip-path:polygon(50% 0%,100% 24%,88% 100%,12% 100%,0% 24%)}
-.boat-icon::after{content:"";position:absolute;left:9px;top:10px;width:4px;height:23px;background:#102a43;border-radius:2px;opacity:.9}
+.boat-icon{width:14px;height:28px;position:relative;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}.boat-icon::before{content:' ';position:absolute;left:2px;top:1px;width:10px;height:25px;background:#fff;border:1.5px solid #102a43;border-radius:50% 50% 32% 32% / 62% 62% 28% 28%;clip-path:polygon(50% 0%,100% 24%,88% 100%,12% 100%,0% 24%)}.boat-icon::after{content:'';position:absolute;left:6px;top:7px;width:2.5px;height:16px;background:#102a43;border-radius:2px;opacity:.9}
+.direction-card{margin-top:13px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#fafbfc}.direction-card h3{font-size:13px;margin:0 0 5px}.direction-card .selected-note{margin:0 0 8px}.direction-chart{height:245px;position:relative}.direction-chart canvas{width:100%!important;height:100%!important}.direction-point-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:8px 0}.direction-point-metric{border:1px solid #e4e8ec;border-radius:6px;padding:6px;background:#fff}.direction-point-metric b{display:block;font-size:13px}.direction-point-metric span{font-size:9px;color:#667085}.direction-note{font-size:9px;color:#667085;line-height:1.35;margin-top:7px}.direction-legend{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:8px}.direction-legend div{border:1px solid #e4e8ec;border-radius:5px;padding:5px;text-align:center;font-size:9px;background:#fff}.direction-legend b{display:block;font-size:11px;color:#17202a}.map-rose-icon{width:38px;height:38px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));}.map-rose-icon img{width:38px;height:38px;display:block}.map-rose-wrap{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.92);border:2px solid #fff}.direction-empty{font-size:11px;color:#667085;padding:18px 6px;text-align:center;border:1px dashed #d9e0e6;border-radius:7px;background:#fff}
 .modal{position:fixed;inset:0;background:rgba(16,42,67,.42);display:none;align-items:center;justify-content:center;z-index:5000;padding:20px}
 .modal.open{display:flex}
 .modal-card{width:min(620px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:12px;box-shadow:0 18px 55px rgba(0,0,0,.28);padding:16px}
@@ -54,7 +53,7 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
 
 </head>
 <body>
-<header><div><h1>Wave Route Analyzer — V3.18</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-right"><label class="color-toggle" title="Color the route according to Mean Hs at the sampled route points"><span>Color route by Mean Hs</span><input id="colorByHs" type="checkbox"><span class="toggle-slider"></span></label><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></div></header>
+<header><div><h1>Wave Route Analyzer — V3.20</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-right"><label class="color-toggle" title="Choose how the route is coloured"><span>Route colouring</span><select id="routeColorMode" class="route-color-select"><option value="none">No colouring (single colour)</option><option value="beaufort">Colour by Beaufort (Wind)</option><option value="douglas">Colour by Douglas (Hs)</option></select></label><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></div></header>
 <div class="app">
 <aside id="sidebar">
   <label>Route points</label>
@@ -88,8 +87,9 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
     <option value="50">50 points</option>
     <option value="100">100 points</option>
   </select>
-  <label style="font-weight:500;margin-top:8px"><input id="showHeading" type="checkbox" checked style="width:auto"> Show vessel heading on map</label>
-  <div class="pickhelp">Small boat symbol points in the vessel course direction. Click a boat to inspect the historical wave-direction distribution.</div>
+  <label style="font-weight:500;margin-top:8px"><input id="showHeading" type="checkbox" checked style="width:auto"> Show vessel heading on calculation points</label>
+  <label style="font-weight:500;margin-top:7px"><input id="showMapRoses" type="checkbox" style="width:auto"> Show wave roses on calculation points</label>
+  <div class="pickhelp">Click a vessel symbol or wave rose to inspect the selected point. The rose is shown in this panel without covering the map.</div>
   <label>Season filter</label>
   <div class="small" style="margin:-1px 0 5px">The full selected historical period is analysed; the filter keeps only the selected three calendar months in every year of that period.</div>
   <select id="season">
@@ -115,25 +115,27 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
     <div class="metric"><span title="99° percentile di Hs: il 99% delle osservazioni è uguale o inferiore a questo valore, mentre l'1% è superiore.">P99 Hs ⓘ</span><span id="p99">—</span></div>
   </div>
   <div class="card"><b>Hs along route</b><div class="chartbox"><canvas id="chart"></canvas></div></div>
+  <div class="direction-card" id="directionCard">
+    <h3>Wave direction distribution</h3>
+    <div id="directionSubtitle" class="selected-note">Select a vessel heading or wave-rose point on the map.</div>
+    <div id="directionEmpty" class="direction-empty">No calculation point selected.</div>
+    <div id="directionContent" hidden>
+      <div class="direction-point-grid">
+        <div class="direction-point-metric"><b id="directionMean">—</b><span>Mean Hs</span></div>
+        <div class="direction-point-metric"><b id="directionP95">—</b><span>P95 Hs</span></div>
+        <div class="direction-point-metric"><b id="directionMax">—</b><span>Maximum Hs</span></div>
+        <div class="direction-point-metric"><b id="directionHeading">—</b><span>Vessel heading</span></div>
+      </div>
+      <div class="direction-chart"><canvas id="roseChart"></canvas></div>
+      <div id="directionLegend" class="direction-legend"></div>
+      <div class="direction-note"><b>VMDR</b> is the direction FROM which the waves arrive, clockwise from true North. The rose shows the historical distribution of the individual VMDR observations at the selected route point.</div>
+    </div>
+  </div>
   <details class="card"><summary><b>Copernicus diagnostic</b></summary><div id="debug" class="debug">No wave request yet.</div></details>
   <p class="small"><b>Routing:</b> searoute-ts / Eurostat 2025 MARNET maritime network. <b>Heading:</b> local route bearing, clockwise from North. <b>Wave data:</b> Copernicus Marine Global Ocean Waves Reanalysis, variable <b>VHM0</b> (spectral significant wave height), 0.2° grid, 3-hourly. This is a research/planning tool, not certified navigation.</p>
 </aside>
 <div id="resizer" class="resizer" title="Drag to resize the control panel"></div>
-<div id="map"><div id="hsLegend" class="hs-legend" hidden><div class="hs-legend-title">Mean Hs (m) · Beaufort sea-state equivalent</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#2166ac"></span><b>&lt; 0.5</b>&nbsp; · Bft 0–1 · Calm</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#67a9cf"></span><b>0.5 – 1.5</b>&nbsp; · Bft 2–3 · Slight</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#1a9850"></span><b>1.5 – 2.5</b>&nbsp; · Bft 4–5 · Moderate</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#fee08b"></span><b>2.5 – 4.0</b>&nbsp; · Bft 6 · Moderate</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#f46d43"></span><b>4.0 – 6.0</b>&nbsp; · Bft 7–8 · High</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#a50026"></span><b>≥ 6.0</b>&nbsp; · Bft 9–12 · Very high</div><div class="hs-legend-note">Approximate sea-state classification; Beaufort itself is a wind-force scale.</div></div></div>
-</div>
-<div id="roseModal" class="modal">
-  <div class="modal-card">
-    <div class="modal-head"><div><h2 id="roseTitle">Wave direction distribution</h2><div id="roseSubtitle" class="selected-note"></div></div><button id="roseClose" class="modal-close" aria-label="Close">×</button></div>
-    <div class="point-grid">
-      <div class="point-metric"><b id="roseMean">—</b><span>Mean Hs</span></div>
-      <div class="point-metric"><b id="roseP95">—</b><span>P95 Hs</span></div>
-      <div class="point-metric"><b id="roseMax">—</b><span>Maximum Hs</span></div>
-      <div class="point-metric"><b id="roseHeading">—</b><span>Vessel heading</span></div>
-    </div>
-    <div class="rose-wrap"><canvas id="roseChart"></canvas><div id="roseBoat" class="rose-boat-overlay"></div><div id="roseHeadingLabel" class="rose-heading-label"></div></div>
-    <div id="roseLegend" class="rose-legend"></div>
-    <div class="rose-note"><b>VMDR = direction FROM which the waves arrive</b>, clockwise from true North. The rose shows the historical distribution of the individual VMDR observations used for this route point, not a single prevailing-direction arrow. The blue arrow shows the vessel heading and the boat in the centre shows the vessel orientation. This makes it possible to read the wave directions directly relative to the vessel course.</div>
-  </div>
+<div id="map"><div id="hsLegend" class="hs-legend" hidden></div></div>
 </div>
 
 <script>
@@ -145,7 +147,7 @@ osmLayer.addTo(map);
 const satelliteWithLabels=L.layerGroup([satelliteLayer,satelliteLabels]);
 L.control.layers({'Standard':osmLayer,'Satellite':satelliteLayer,'Satellite + Labels':satelliteWithLabels},null,{position:'topright',collapsed:true}).addTo(map);
 
-let routeLayer=null, routeColorLayer=null, originMarker=null, destinationMarker=null, waypointMarkers=[], headingLayer=null, routeCoords=[], chart=null, roseChart=null, lastRows=[];
+let routeLayer=null, routeColorLayer=null, originMarker=null, destinationMarker=null, waypointMarkers=[], headingLayer=null, roseMapLayer=null, routeCoords=[], chart=null, roseChart=null, lastRows=[];
 let originPoint=[51.9244,4.4777], destinationPoint=[1.3521,103.8198], waypointPoints=[null,null,null];
 let splitterDragging=false;
 let pickMode=null;
@@ -181,14 +183,40 @@ function headingFor(points,i){
   // small bends in the route.
   return bearingDeg(points[i-1],points[i+1]);
 }
-function hsRouteColor(hs){
+function hsRouteColor(hs,mode){
   if(!Number.isFinite(hs))return '#1769aa';
+  if(mode==='douglas'){
+    if(hs===0)return '#313695';
+    if(hs<=0.1)return '#4575b4';
+    if(hs<=0.5)return '#74add1';
+    if(hs<=1.25)return '#00a6ca';
+    if(hs<=2.5)return '#1a9850';
+    if(hs<=4.0)return '#fee08b';
+    if(hs<=6.0)return '#fdae61';
+    if(hs<=9.0)return '#f46d43';
+    if(hs<=14.0)return '#d73027';
+    return '#7f0000';
+  }
+  // Beaufort is retained as an indicative wind-force correlation, not a wave-height scale.
   if(hs<0.5)return '#2166ac';
   if(hs<1.5)return '#67a9cf';
   if(hs<2.5)return '#1a9850';
   if(hs<4.0)return '#fee08b';
   if(hs<6.0)return '#f46d43';
   return '#a50026';
+}
+function renderHsLegend(mode){
+  const el=$('hsLegend');
+  if(mode==='none'){el.hidden=true;el.innerHTML='';return;}
+  el.hidden=false;
+  if(mode==='douglas'){
+    const rows=[
+      ['#313695','0','0 m','Calm (glassy)'],['#4575b4','1','0–0.1 m','Calm (rippled)'],['#74add1','2','0.1–0.5 m','Smooth'],['#00a6ca','3','0.5–1.25 m','Slight'],['#1a9850','4','1.25–2.5 m','Moderate'],['#fee08b','5','2.5–4 m','Rough'],['#fdae61','6','4–6 m','Very rough'],['#f46d43','7','6–9 m','High'],['#d73027','8','9–14 m','Very high'],['#7f0000','9','>14 m','Phenomenal']
+    ];
+    el.innerHTML='<div class="hs-legend-title">Mean Hs (m) · WMO / Douglas Sea State</div>'+rows.map(r=>`<div class="hs-legend-row"><span class="hs-swatch" style="background:${r[0]}"></span><b>${r[2]}</b>&nbsp; · ${r[1]} · ${r[3]}</div>`).join('')+'<div class="hs-legend-note">Classification based directly on wave height. Bounding heights are included in the lower class.</div>';
+  }else{
+    el.innerHTML='<div class="hs-legend-title">Mean Hs (m) · Beaufort sea-state equivalent</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#2166ac"></span><b>&lt; 0.5</b>&nbsp; · Bft 0–1 · Calm</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#67a9cf"></span><b>0.5 – 1.5</b>&nbsp; · Bft 2–3 · Slight</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#1a9850"></span><b>1.5 – 2.5</b>&nbsp; · Bft 4–5 · Moderate</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#fee08b"></span><b>2.5 – 4.0</b>&nbsp; · Bft 6 · Moderate</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#f46d43"></span><b>4.0 – 6.0</b>&nbsp; · Bft 7–8 · High</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#a50026"></span><b>≥ 6.0</b>&nbsp; · Bft 9–12 · Very high</div><div class="hs-legend-note">Indicative correlation only; Beaufort is a wind-force scale, not a wave-height classification.</div>';
+  }
 }
 function clearRouteColorLayer(){
   if(routeColorLayer){map.removeLayer(routeColorLayer);routeColorLayer=null;}
@@ -219,15 +247,15 @@ function meanAtDistance(d,rows){
 }
 function renderRouteColoring(){
   clearRouteColorLayer();
-  const enabled=$('colorByHs').checked;
-  $('hsLegend').hidden=!enabled;
-  if(!enabled || !routeCoords.length || !lastRows.length)return;
+  const mode=$('routeColorMode').value;
+  renderHsLegend(mode);
+  if(mode==='none' || !routeCoords.length || !lastRows.length)return;
   routeColorLayer=L.layerGroup().addTo(map);
   const groups=routeCumulative(routeCoords);
   groups.forEach(group=>{
     for(let i=0;i<group.length-1;i++){
       const a=group[i],b=group[i+1],d=(a.d+b.d)/2,hs=meanAtDistance(d,lastRows);
-      L.polyline([[a.p[1],a.p[0]],[b.p[1],b.p[0]]],{color:hsRouteColor(hs),weight:6,opacity:.95,lineCap:'round',lineJoin:'round',interactive:false}).addTo(routeColorLayer);
+      L.polyline([[a.p[1],a.p[0]],[b.p[1],b.p[0]]],{color:hsRouteColor(hs,mode),weight:6,opacity:.95,lineCap:'round',lineJoin:'round',interactive:false}).addTo(routeColorLayer);
     }
   });
 }
@@ -235,48 +263,84 @@ function clearHeadingLayer(){
   if(headingLayer){headingLayer.clearLayers();map.removeLayer(headingLayer);}
   headingLayer=null;
 }
+function clearRoseMapLayer(){
+  if(roseMapLayer){roseMapLayer.clearLayers();map.removeLayer(roseMapLayer);}
+  roseMapLayer=null;
+}
 function destroyRose(){if(roseChart){roseChart.destroy();roseChart=null;}}
 const roseLabels=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const roseAngles=roseLabels.map((_,i)=>i*22.5);
 function relativeCategoryFromAngle(angle){const a=Math.abs(signedAngleDeg(0,angle));if(a<=30)return 'Head seas';if(a<=75)return 'Bow quartering';if(a<105)return 'Beam seas';if(a<=150)return 'Stern quartering';return 'Following seas';}
+function polarPoint(cx,cy,r,aDeg){const a=(aDeg-90)*Math.PI/180;return [cx+r*Math.cos(a),cy+r*Math.sin(a)];}
+function roseSvgData(r,size=48){
+  const bins=Array.isArray(r.waveBins)?r.waveBins.map(Number):Array(16).fill(0);
+  const maxBin=Math.max(1,...bins.filter(Number.isFinite));
+  const heading=Number.isFinite(r.heading)?r.heading:0;
+  const cx=size/2,cy=size/2,ro=size*.43,ri=size*.10;
+  const parts=[];
+  for(let i=0;i<16;i++){
+    const a0=roseAngles[i]-11.25,a1=roseAngles[i]+11.25;
+    const p0=polarPoint(cx,cy,ro,a0),p1=polarPoint(cx,cy,ro,a1),q1=polarPoint(cx,cy,ri,a1),q0=polarPoint(cx,cy,ri,a0);
+    const opacity=.18+.70*((Number.isFinite(bins[i])?bins[i]:0)/maxBin);
+    parts.push(`<path d="M ${q0[0].toFixed(1)} ${q0[1].toFixed(1)} L ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} A ${ro.toFixed(1)} ${ro.toFixed(1)} 0 0 1 ${p1[0].toFixed(1)} ${p1[1].toFixed(1)} L ${q1[0].toFixed(1)} ${q1[1].toFixed(1)} Z" fill="#2f80ed" fill-opacity="${opacity.toFixed(2)}" stroke="#fff" stroke-width=".7"/>`);
+  }
+  const end=polarPoint(cx,cy,ro*.82,heading), ah=size*.13, aw=size*.065;
+  const left=polarPoint(end[0],end[1],ah,heading+150), right=polarPoint(end[0],end[1],ah,heading-150);
+  const border=`<circle cx="${cx}" cy="${cy}" r="${ro.toFixed(1)}" fill="rgba(255,255,255,.86)" stroke="#1769aa" stroke-width="1.4"/>`;
+  const arrow=`<line x1="${cx}" y1="${cy}" x2="${end[0].toFixed(1)}" y2="${end[1].toFixed(1)}" stroke="#1769aa" stroke-width="1.8"/><polygon points="${end[0].toFixed(1)},${end[1].toFixed(1)} ${left[0].toFixed(1)},${left[1].toFixed(1)} ${right[0].toFixed(1)},${right[1].toFixed(1)}" fill="#1769aa"/>`;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${border}${parts.join('')}${arrow}</svg>`;
+  return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg);
+}
+function renderMapRoses(rows){
+  clearRoseMapLayer();
+  if(!$('showMapRoses').checked || !rows.length)return;
+  roseMapLayer=L.layerGroup().addTo(map);
+  rows.forEach((r,i)=>{
+    if(!Array.isArray(r.waveBins)||!r.waveBins.some(Number.isFinite))return;
+    const icon=L.divIcon({className:'',html:`<div class="map-rose-icon"><img src="${roseSvgData(r,48)}" alt="Wave direction rose"></div>`,iconSize:[48,48],iconAnchor:[24,24]});
+    const marker=L.marker([r.lat,r.lon],{icon,interactive:true,zIndexOffset:250});
+    marker.bindTooltip(`<b>Route point ${i+1}</b><br>Vessel heading: ${Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—'}<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}<br><span style="color:#1769aa"><b>Click to inspect direction distribution</b></span>`,{direction:'top',sticky:true});
+    marker.on('click',()=>selectRosePoint(r,i));
+    marker.addTo(roseMapLayer);
+  });
+}
 function renderHeadingArrows(rows){
   clearHeadingLayer();
   if(!$('showHeading').checked || rows.length<2)return;
   headingLayer=L.layerGroup().addTo(map);
   rows.forEach((r,i)=>{
     if(!Number.isFinite(r.heading))return;
-    const icon=L.divIcon({className:'',html:`<div class="boat-icon" style="transform:rotate(${r.heading}deg)"></div>`,iconSize:[22,42],iconAnchor:[11,21]});
+    const icon=L.divIcon({className:'',html:`<div class="boat-icon" style="transform:rotate(${r.heading}deg)"></div>`,iconSize:[14,28],iconAnchor:[7,14]});
     const marker=L.marker([r.lat,r.lon],{icon,interactive:true,zIndexOffset:300});
-    marker.bindTooltip(`<b>Route point ${i+1}</b><br>Vessel heading: ${r.heading.toFixed(0)}°<br>Distance: ${kmToNm(r.distanceKm).toFixed(0)} NM<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}<br>P95 Hs: ${Number.isFinite(r.p95)?r.p95.toFixed(2)+' m':'—'}<br><span style="color:#1769aa"><b>Click for wave direction distribution</b></span>`,{direction:'top',sticky:true});
-    marker.on('click',()=>openRose(r,i));
+    marker.bindTooltip(`<b>Route point ${i+1}</b><br>Vessel heading: ${r.heading.toFixed(0)}°<br>Distance: ${kmToNm(r.distanceKm).toFixed(0)} NM<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}<br>P95 Hs: ${Number.isFinite(r.p95)?r.p95.toFixed(2)+' m':'—'}<br><span style="color:#1769aa"><b>Click to inspect wave direction distribution</b></span>`,{direction:'top',sticky:true});
+    marker.on('click',()=>selectRosePoint(r,i));
     marker.addTo(headingLayer);
   });
 }
-function openRose(r,index){
-  $('roseTitle').textContent=`Wave direction distribution — Point ${index+1}/${lastRows.length}`;
-  $('roseSubtitle').textContent=`Distance ${kmToNm(r.distanceKm).toFixed(0)} NM · ${r.lat.toFixed(3)}°, ${r.lon.toFixed(3)}°`;
-  $('roseMean').textContent=Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—';
-  $('roseP95').textContent=Number.isFinite(r.p95)?r.p95.toFixed(2)+' m':'—';
-  $('roseMax').textContent=Number.isFinite(r.max)?r.max.toFixed(2)+' m':'—';
-  $('roseHeading').textContent=Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—';
+function selectRosePoint(r,index){
+  $('directionSubtitle').textContent=`Point ${index+1}/${lastRows.length} · ${kmToNm(r.distanceKm).toFixed(0)} NM · ${r.lat.toFixed(3)}°, ${r.lon.toFixed(3)}°`;
+  $('directionEmpty').hidden=true;
+  $('directionContent').hidden=false;
+  $('directionMean').textContent=Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—';
+  $('directionP95').textContent=Number.isFinite(r.p95)?r.p95.toFixed(2)+' m':'—';
+  $('directionMax').textContent=Number.isFinite(r.max)?r.max.toFixed(2)+' m':'—';
+  $('directionHeading').textContent=Number.isFinite(r.heading)?r.heading.toFixed(0)+'°':'—';
   const bins=Array.isArray(r.waveBins)?r.waveBins.map(Number):Array(16).fill(0);
   const total=bins.reduce((a,b)=>a+(Number.isFinite(b)?b:0),0);
   const maxBin=Math.max(1,...bins);
-  const heading=Number.isFinite(r.heading)?r.heading:0;
   destroyRose();
+  const heading=Number.isFinite(r.heading)?r.heading:0;
   const headingPlugin={id:'vesselHeading',afterDraw(chart){const {ctx,chartArea}=chart;const cx=(chartArea.left+chartArea.right)/2,cy=(chartArea.top+chartArea.bottom)/2;const rr=Math.min(chartArea.right-chartArea.left,chartArea.bottom-chartArea.top)*.42;const a=heading*Math.PI/180;const ex=cx+Math.sin(a)*rr,ey=cy-Math.cos(a)*rr;ctx.save();ctx.strokeStyle='#1769aa';ctx.fillStyle='#1769aa';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ex,ey);ctx.stroke();const ah=9,aw=4;ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-Math.sin(a)*ah+Math.cos(a)*aw,ey+Math.cos(a)*ah+Math.sin(a)*aw);ctx.lineTo(ex-Math.sin(a)*ah-Math.cos(a)*aw,ey+Math.cos(a)*ah-Math.sin(a)*aw);ctx.closePath();ctx.fill();ctx.restore();}};
-  roseChart=new Chart($('roseChart'),{type:'polarArea',plugins:[headingPlugin],data:{labels:roseLabels,datasets:[{data:bins,backgroundColor:roseLabels.map((_,i)=>{const alpha=.28+.52*(bins[i]/maxBin);return `rgba(230,126,34,${alpha.toFixed(2)})`}),borderColor:'#fff',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:250},scales:{r:{beginAtZero:true,ticks:{display:false},grid:{circular:true},angleLines:{display:true},pointLabels:{display:true,font:{size:11,weight:'700'}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>{const n=Number(ctx.raw||0),pct=total?100*n/total:0;return `${roseLabels[ctx.dataIndex]}: ${n.toLocaleString()} obs (${pct.toFixed(1)}%)`;},title:()=>`Waves FROM`}}}}});
-  $('roseBoat').style.transform=`translate(-50%,-50%) rotate(${heading}deg)`;
-  $('roseHeadingLabel').textContent=`COURSE ${heading.toFixed(0)}°`;
+  roseChart=new Chart($('roseChart'),{type:'polarArea',plugins:[headingPlugin],data:{labels:roseLabels,datasets:[{data:bins,backgroundColor:roseLabels.map((_,i)=>{const alpha=.28+.52*(bins[i]/maxBin);return `rgba(47,128,237,${alpha.toFixed(2)})`}),borderColor:'#fff',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:200},scales:{r:{beginAtZero:true,ticks:{display:false},grid:{circular:true},angleLines:{display:true},pointLabels:{display:true,font:{size:10,weight:'700'}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>{const n=Number(ctx.raw||0),pct=total?100*n/total:0;return `${roseLabels[ctx.dataIndex]}: ${n.toLocaleString()} obs (${pct.toFixed(1)}%)`;},title:()=>`Waves FROM`}}}}});
   const relCounts={'Head seas':0,'Bow quartering':0,'Beam seas':0,'Stern quartering':0,'Following seas':0};
   bins.forEach((n,i)=>{const cat=relativeCategoryFromAngle(signedAngleDeg(heading,roseAngles[i]));relCounts[cat]+=n;});
   const order=['Head seas','Bow quartering','Beam seas','Stern quartering','Following seas'];
-  $('roseLegend').innerHTML=order.map(k=>`<div><b>${total?(100*relCounts[k]/total).toFixed(0):0}%</b>${k}</div>`).join('');
-  $('roseModal').classList.add('open');
+  $('directionLegend').innerHTML=order.map(k=>`<div><b>${total?(100*relCounts[k]/total).toFixed(0):0}%</b>${k}</div>`).join('');
+  $('directionCard').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
-$('roseClose').onclick=()=>{$('roseModal').classList.remove('open');destroyRose();};
-$('roseModal').addEventListener('click',e=>{if(e.target===$('roseModal')){$('roseModal').classList.remove('open');destroyRose();}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('roseModal').classList.remove('open');destroyRose();}});
+$('showHeading').addEventListener('change',()=>{renderHeadingArrows(lastRows);});
+$('showMapRoses').addEventListener('change',()=>{renderMapRoses(lastRows);});
+
 function setOrigin(p){originPoint=[Number(p[0]),Number(p[1])];updateMarker('origin');invalidateRoute('Origin updated. Calculate the maritime route again.');}
 function setDest(p){destinationPoint=[Number(p[0]),Number(p[1])];updateMarker('destination');invalidateRoute('Destination updated. Calculate the maritime route again.');}
 function setWaypoint(i,p){waypointPoints[i-1]=[Number(p[0]),Number(p[1])];updateWaypointMarker(i);invalidateRoute(`Waypoint ${i} updated. Calculate the maritime route again.`);}
@@ -302,7 +366,7 @@ function updateMarker(which){
 }
 function invalidateRoute(msg){
   routeCoords=[];lastRows=[];$('waves').disabled=true;$('csv').disabled=true;
-  if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;} clearRouteColorLayer(); $('hsLegend').hidden=true; clearHeadingLayer();
+  if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;} clearRouteColorLayer(); renderRouteColoring(); clearHeadingLayer(); clearRoseMapLayer(); destroyRose(); $('directionEmpty').hidden=false; $('directionContent').hidden=true; $('directionSubtitle').textContent='Select a vessel heading or wave-rose point on the map.';
   $('dist').textContent='—';$('npts').textContent='—';
   $('mean').textContent='—';$('median').textContent='—';$('max').textContent='—';$('p95').textContent='—';$('p99').textContent='—';
   if(chart){chart.destroy();chart=null;}
@@ -317,7 +381,7 @@ function activatePick(mode){
   map.getContainer().classList.toggle('pick-mode',!!mode);
   $('pickhelp').textContent=mode==='origin'?'Now click the origin location on the map.':mode==='destination'?'Now click the destination location on the map.':mode?.startsWith('waypoint')?`Now click the location for ${mode.replace('waypoint','Waypoint ')}.`:'Select a route-point button, then click the map.';
 }
-$('colorByHs').onchange=()=>renderRouteColoring();
+$('routeColorMode').onchange=()=>renderRouteColoring();
 $('pickOrigin').onclick=()=>activatePick('origin');
 $('pickDestination').onclick=()=>activatePick('destination');
 document.querySelectorAll('.wpPick').forEach(b=>b.onclick=()=>activatePick(`waypoint${b.dataset.wp}`));
@@ -366,7 +430,7 @@ $('route').onclick=async()=>{
   try{
     const r=await getRoute();routeCoords=r.geometry.coordinates;
     if(routeLayer)map.removeLayer(routeLayer);
-    routeLayer=L.geoJSON({type:'Feature',geometry:r.geometry},{style:{weight:4,color:'#1769aa',opacity:.8}}).addTo(map); clearRouteColorLayer(); $('hsLegend').hidden=true;
+    routeLayer=L.geoJSON({type:'Feature',geometry:r.geometry},{style:{weight:4,color:'#1769aa',opacity:.8}}).addTo(map); clearRouteColorLayer(); renderRouteColoring();
     updateMarker('origin');updateMarker('destination');for(let i=1;i<=3;i++)updateWaypointMarker(i);
     map.fitBounds(routeLayer.getBounds(),{padding:[20,20]});
     $('dist').textContent=kmToNm(r.totalDistanceKm).toFixed(0)+' NM';
@@ -441,7 +505,7 @@ $('waves').onclick=async()=>{
       const relativeAngle=Number.isFinite(waveFrom)?signedAngleDeg(heading,waveFrom):NaN;
       rows.push({lon:p.lon,lat:p.lat,distanceKm:sm.dist[p.idx],heading,waveFrom,relativeAngle,seaState:Number.isFinite(relativeAngle)?seaStateClass(relativeAngle):'',count:Number(h.count||0),waveCount:Number(h.wave_direction_count||0),waveBins:Array.isArray(h.wave_direction_bins)?h.wave_direction_bins.map(Number):Array(16).fill(0),rawCount:Number(h.raw_count||0),seasonCount:Number(h.season_count||0),seasonName:h.season_name||'',mean:Number(h.mean),median:Number(h.median),max:Number(h.max),p95:Number(h.p95),p99:Number(h.p99),error:h.error||''});
     }
-    lastRows=rows;renderDebug(rows);renderHeadingArrows(rows);renderRouteColoring();
+    lastRows=rows;renderDebug(rows);renderHeadingArrows(rows);renderMapRoses(rows);renderRouteColoring();
     const validRows=rows.filter(r=>Number.isFinite(r.mean));
     if(!validRows.length){
       const firstError=rows.find(r=>r.error)?.error || 'Copernicus returned no valid VHM0 values.';
