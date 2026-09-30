@@ -97,9 +97,9 @@ function renderHsLegend(mode){
     const rows=[
       ['#313695','0','0 m','Calm (glassy)'],['#4575b4','1','0–0.1 m','Calm (rippled)'],['#74add1','2','0.1–0.5 m','Smooth'],['#00a6ca','3','0.5–1.25 m','Slight'],['#1a9850','4','1.25–2.5 m','Moderate'],['#fee08b','5','2.5–4 m','Rough'],['#fdae61','6','4–6 m','Very rough'],['#f46d43','7','6–9 m','High'],['#d73027','8','9–14 m','Very high'],['#7f0000','9','>14 m','Phenomenal']
     ];
-    el.innerHTML='<div class="hs-legend-title">Mean Hs (m) · WMO / Douglas Sea State</div>'+rows.map(r=>`<div class="hs-legend-row"><span class="hs-swatch" style="background:${r[0]}"></span><b>${r[2]}</b>&nbsp; · ${r[1]} · ${r[3]}</div>`).join('')+'<div class="hs-legend-note">Classification based directly on wave height. Bounding heights are included in the lower class.</div>';
+    el.innerHTML='<div class="hs-legend-title">Douglas · Mean Hs</div>'+rows.map(r=>`<div class="hs-legend-row"><span class="hs-swatch" style="background:${r[0]}"></span><b>${r[1]}</b>&nbsp; · ${r[2]} · ${r[3]}</div>`).join('')+'<div class="hs-legend-note">Wave-height classification.</div>';
   }else{
-    el.innerHTML='<div class="hs-legend-title">Mean Hs (m) · Beaufort sea-state equivalent</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#2166ac"></span><b>&lt; 0.5</b>&nbsp; · Bft 0–1 · Calm</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#67a9cf"></span><b>0.5 – 1.5</b>&nbsp; · Bft 2–3 · Slight</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#1a9850"></span><b>1.5 – 2.5</b>&nbsp; · Bft 4–5 · Moderate</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#fee08b"></span><b>2.5 – 4.0</b>&nbsp; · Bft 6 · Moderate</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#f46d43"></span><b>4.0 – 6.0</b>&nbsp; · Bft 7–8 · High</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#a50026"></span><b>≥ 6.0</b>&nbsp; · Bft 9–12 · Very high</div><div class="hs-legend-note">Indicative correlation only; Beaufort is a wind-force scale, not a wave-height classification.</div>';
+    el.innerHTML='<div class="hs-legend-title">Beaufort · Mean Hs</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#2166ac"></span><b>&lt;0.5 m</b>&nbsp; · Bft 0–1</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#67a9cf"></span><b>0.5–1.5 m</b>&nbsp; · Bft 2–3</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#1a9850"></span><b>1.5–2.5 m</b>&nbsp; · Bft 4–5</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#fee08b"></span><b>2.5–4 m</b>&nbsp; · Bft 6</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#f46d43"></span><b>4–6 m</b>&nbsp; · Bft 7–8</div><div class="hs-legend-row"><span class="hs-swatch" style="background:#a50026"></span><b>≥6 m</b>&nbsp; · Bft 9–12</div><div class="hs-legend-note">Indicative only: Beaufort is a wind-force scale.</div>';
   }
 }
 function clearRouteColorLayer(){
@@ -169,7 +169,7 @@ function renderCalculationPoints(rows){
     marker.addTo(calcPointLayer);
   });
 }
-function destroyRose(){if(roseChart){roseChart.innerHTML="";roseChart=null;}}
+function destroyRose(){if(roseChart){roseChart.innerHTML="";roseChart=null;} const el=$('roseHsLegend'); if(el){el.hidden=true;el.innerHTML="";}}
 const roseLabels=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const roseAngles=roseLabels.map((_,i)=>i*22.5);
 function relativeCategoryFromAngle(angle){const a=Math.abs(signedAngleDeg(0,angle));if(a<=30)return 'Head seas';if(a<=75)return 'Bow quartering';if(a<105)return 'Beam seas';if(a<=150)return 'Stern quartering';return 'Following seas';}
@@ -263,6 +263,14 @@ function renderHeadingArrows(rows){
     marker.addTo(headingLayer);
   });
 }
+function renderRoseHsLegend(arctic){
+  const el=$('roseHsLegend');
+  if(!el)return;
+  const palette=hsRosePalette(!!arctic);
+  const ranges=['0–0.5 m','0.5–1.0 m','1.0–1.5 m','1.5–2.0 m','≥2.0 m'];
+  el.innerHTML='<span class="rose-hs-legend-title">Hs:</span>'+ranges.map((label,i)=>`<span class="rose-hs-legend-item"><span class="rose-hs-swatch" style="background:${palette[i]}"></span>${label}</span>`).join('');
+  el.hidden=false;
+}
 function selectRosePoint(r,index){
   $('directionSubtitle').textContent=`Point ${index+1}/${lastRows.length} · ${kmToNm(r.distanceKm).toFixed(0)} NM · ${r.lat.toFixed(3)}°, ${r.lon.toFixed(3)}°${r.isArctic?' · ARCTIC':''}`;
   $('directionEmpty').hidden=true;
@@ -280,6 +288,7 @@ function selectRosePoint(r,index){
   const roseHost=$('roseChart');
   roseHost.innerHTML=`<img src="${roseSvgData(r,360,true)}" alt="Wave direction and significant wave height distribution rose" style="width:100%;height:100%;object-fit:contain">`;
   roseChart=roseHost;
+  renderRoseHsLegend(!!r.isArctic);
   const relCounts={'Head seas':0,'Bow quartering':0,'Beam seas':0,'Stern quartering':0,'Following seas':0};
   bins.forEach((n,i)=>{const cat=relativeCategoryFromAngle(signedAngleDeg(heading,roseAngles[i]));relCounts[cat]+=n;});
   const order=['Head seas','Bow quartering','Beam seas','Stern quartering','Following seas'];
