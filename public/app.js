@@ -31,7 +31,7 @@ const WorldViewControl=L.Control.extend({
 });
 map.addControl(new WorldViewControl());
 
-let routeLayer=null, routeColorLayer=null, originMarker=null, destinationMarker=null, waypointMarkers=[], headingLayer=null, roseMapLayer=null, routeCoords=[], chart=null, roseChart=null, lastRows=[];
+let routeLayer=null, routeColorLayer=null, originMarker=null, destinationMarker=null, waypointMarkers=[], headingLayer=null, roseMapLayer=null, calcPointLayer=null, routeCoords=[], chart=null, roseChart=null, lastRows=[];
 let originPoint=[51.9244,4.4777], destinationPoint=[1.3521,103.8198], waypointPoints=[null,null,null];
 let splitterDragging=false;
 let pickMode=null;
@@ -151,6 +151,24 @@ function clearRoseMapLayer(){
   if(roseMapLayer){roseMapLayer.clearLayers();map.removeLayer(roseMapLayer);}
   roseMapLayer=null;
 }
+function clearCalculationPointLayer(){
+  if(calcPointLayer){calcPointLayer.clearLayers();map.removeLayer(calcPointLayer);}
+  calcPointLayer=null;
+}
+function renderCalculationPoints(rows){
+  clearCalculationPointLayer();
+  if(!rows.length)return;
+  calcPointLayer=L.layerGroup().addTo(map);
+  rows.forEach((r,i)=>{
+    if(!Number.isFinite(r.lat)||!Number.isFinite(r.lon))return;
+    const hasWave=Array.isArray(r.waveBins)&&r.waveBins.some(v=>Number.isFinite(v)&&Number(v)>0);
+    const color=r.isArctic?'#7c3aed':'#1769aa';
+    const marker=L.circleMarker([r.lat,r.lon],{radius:hasWave?3.5:3,weight:1.5,color:'#fff',fillColor:color,fillOpacity:.95,interactive:true,zIndexOffset:180});
+    marker.bindTooltip(`<b>Calculation point ${i+1}</b><br>Distance: ${kmToNm(r.distanceKm).toFixed(0)} NM<br>Mean Hs: ${Number.isFinite(r.mean)?r.mean.toFixed(2)+' m':'—'}${r.isArctic?'<br><span style=\"color:#7c3aed\"><b>Arctic point</b></span>':''}`,{direction:'top',sticky:true});
+    marker.on('click',()=>selectRosePoint(r,i));
+    marker.addTo(calcPointLayer);
+  });
+}
 function destroyRose(){if(roseChart){roseChart.destroy();roseChart=null;}}
 const roseLabels=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const roseAngles=roseLabels.map((_,i)=>i*22.5);
@@ -265,7 +283,7 @@ function updateMarker(which){
   }
 }
 function invalidateRoute(msg){
-  routeCoords=[];lastRows=[];$('waves').disabled=true;$('csv').disabled=true;
+  routeCoords=[];lastRows=[];clearCalculationPointLayer();$('waves').disabled=true;$('csv').disabled=true;
   if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;} clearRouteColorLayer(); renderRouteColoring(); clearHeadingLayer(); clearRoseMapLayer(); destroyRose(); $('directionEmpty').hidden=false; $('directionContent').hidden=true; $('directionSubtitle').textContent='Select a vessel heading or wave-rose point on the map.';
   $('dist').textContent='—';$('npts').textContent='—';
   $('mean').textContent='—';$('median').textContent='—';$('max').textContent='—';$('p95').textContent='—';$('p99').textContent='—';
@@ -454,7 +472,7 @@ $('waves').onclick=async()=>{
       const relativeAngle=Number.isFinite(waveFrom)?signedAngleDeg(heading,waveFrom):NaN;
       rows.push({lon:p.lon,lat:p.lat,distanceKm:sm.dist[p.idx],heading,waveFrom,relativeAngle,seaState:Number.isFinite(relativeAngle)?seaStateClass(relativeAngle):'',count:Number(h.count||0),waveCount:Number(h.wave_direction_count||0),waveBins:Array.isArray(h.wave_direction_bins)?h.wave_direction_bins.map(Number):Array(16).fill(0),rawCount:Number(h.raw_count||0),seasonCount:Number(h.season_count||0),seasonName:h.season_name||'',dataSource:h.data_source||'—',isArctic:Boolean(h.is_arctic),mean:Number(h.mean),median:Number(h.median),max:Number(h.max),p95:Number(h.p95),p99:Number(h.p99),error:h.error||''});
     }
-    lastRows=rows;renderDebug(rows);renderHeadingArrows(rows);renderMapRoses(rows);renderRouteColoring();
+    lastRows=rows;renderDebug(rows);renderCalculationPoints(rows);renderHeadingArrows(rows);renderMapRoses(rows);renderRouteColoring();
     const validRows=rows.filter(r=>Number.isFinite(r.mean));
     if(validRows.length < rows.length){
       const failed=rows.filter(r=>!Number.isFinite(r.mean));
