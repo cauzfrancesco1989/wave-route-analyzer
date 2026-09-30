@@ -1,8 +1,8 @@
-# Wave Route Analyzer V3.20
+# Wave Route Analyzer V3.21
 
 Browser-based maritime route and historical wave analysis tool.
 
-## V3.20 changes
+## V3.21 changes
 - Reduced the vessel heading boat marker size on the map.
 - Moved the selected-point wave-direction rose from the full-screen modal into the left analysis panel, so the map remains fully visible.
 - Added a map display switch to show wave-direction roses directly at all sampled calculation points.
@@ -15,3 +15,10 @@ Browser-based maritime route and historical wave analysis tool.
 Deploy the folder contents to Vercel as in previous versions. Keep the Copernicus Marine credentials in Vercel Environment Variables:
 - `COPERNICUSMARINE_SERVICE_USERNAME`
 - `COPERNICUSMARINE_SERVICE_PASSWORD`
+
+
+## V3.21 — Arctic routing
+- Added “Allow Arctic passages” option.
+- Uses searoute-ts `allowArctic: true` to enable the supported Northwest and Northeast passages.
+- Arctic routing remains a graph-routing feature only: no sea-ice, seasonal navigability, or ice-class model is applied.
+- Default remains OFF for safer/less surprising behaviour.

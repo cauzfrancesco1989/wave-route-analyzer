@@ -53,7 +53,7 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
 
 </head>
 <body>
-<header><div><h1>Wave Route Analyzer — V3.20</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-right"><label class="color-toggle" title="Choose how the route is coloured"><span>Route colouring</span><select id="routeColorMode" class="route-color-select"><option value="none">No colouring (single colour)</option><option value="beaufort">Colour by Beaufort (Wind)</option><option value="douglas">Colour by Douglas (Hs)</option></select></label><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></div></header>
+<header><div><h1>Wave Route Analyzer — V3.21</h1><span>Copernicus Marine · VHM0 + VMDR</span></div><div class="header-right"><label class="color-toggle" title="Choose how the route is coloured"><span>Route colouring</span><select id="routeColorMode" class="route-color-select"><option value="none">No colouring (single colour)</option><option value="beaufort">Colour by Beaufort (Wind)</option><option value="douglas">Colour by Douglas (Hs)</option></select></label><div class="header-logo"><img src="/jumbo-logo.svg" alt="Jumbo"></div></div></header>
 <div class="app">
 <aside id="sidebar">
   <label>Route points</label>
@@ -70,6 +70,7 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:5px">
     <label style="font-weight:500;margin:0"><input id="avoidSuez" type="checkbox" style="width:auto"> Avoid Suez</label>
     <label style="font-weight:500;margin:0"><input id="avoidPanama" type="checkbox" style="width:auto"> Avoid Panama</label>
+    <label style="font-weight:500;margin:0;grid-column:1 / -1"><input id="allowArctic" type="checkbox" style="width:auto"> Allow Arctic passages</label>
   </div>
   <button id="route">Calculate maritime route</button>
 
@@ -132,7 +133,7 @@ label{font-size:12px;font-weight:700;display:block;margin:11px 0 5px}input,selec
     </div>
   </div>
   <details class="card"><summary><b>Copernicus diagnostic</b></summary><div id="debug" class="debug">No wave request yet.</div></details>
-  <p class="small"><b>Routing:</b> searoute-ts / Eurostat 2025 MARNET maritime network. <b>Heading:</b> local route bearing, clockwise from North. <b>Wave data:</b> Copernicus Marine Global Ocean Waves Reanalysis, variable <b>VHM0</b> (spectral significant wave height), 0.2° grid, 3-hourly. This is a research/planning tool, not certified navigation.</p>
+  <p class="small"><b>Routing:</b> searoute-ts / Eurostat 2025 MARNET maritime network. <b>Arctic:</b> Northwest/Northeast Passages are blocked by default; enable “Allow Arctic passages” to permit them. No sea-ice or seasonal navigability model is applied. <b>Heading:</b> local route bearing, clockwise from North. <b>Wave data:</b> Copernicus Marine Global Ocean Waves Reanalysis, variable <b>VHM0</b> (spectral significant wave height), 0.2° grid, 3-hourly. This is a research/planning tool, not certified navigation.</p>
 </aside>
 <div id="resizer" class="resizer" title="Drag to resize the control panel"></div>
 <div id="map"><div id="hsLegend" class="hs-legend" hidden></div></div>
@@ -410,11 +411,12 @@ async function getRoute(){
   for(const url of moduleUrls){try{const mod=await import(url);if(typeof mod.seaRoute==='function'){seaRoute=mod.seaRoute;routeEngine=url;break;}lastImportError=new Error('Module loaded but seaRoute export was not found.');}catch(e){lastImportError=e;}}
   if(typeof seaRoute!=='function')throw new Error('Could not load the maritime routing engine.'+(lastImportError?.message?` (${lastImportError.message})`:''));
   const restrictions=[];if($('avoidSuez').checked)restrictions.push('suez');if($('avoidPanama').checked)restrictions.push('panama');
+  const allowArctic=$('allowArctic').checked;
   const segments=[];let totalDistanceKm=0;
   for(let i=0;i<sequence.length-1;i++){
     status(`Calculating maritime leg ${i+1}/${sequence.length-1}: ${sequence[i].name} → ${sequence[i+1].name}...`);
     const a=sequence[i].p,b=sequence[i+1].p;
-    const result=seaRoute([a[1],a[0]],[b[1],b[0]],{units:'kilometers',appendOriginDestination:true,returnPassages:true,maxSnapDistanceKm:250,antimeridian:'split',allowArctic:false,restrictions});
+    const result=seaRoute([a[1],a[0]],[b[1],b[0]],{units:'kilometers',appendOriginDestination:true,returnPassages:true,maxSnapDistanceKm:250,antimeridian:'split',allowArctic,restrictions});
     if(!result||!result.geometry)throw new Error(`No maritime route was found for ${sequence[i].name} → ${sequence[i+1].name}.`);
     let segs=result.geometry.type==='MultiLineString'?result.geometry.coordinates:[result.geometry.coordinates];
     segs=segs.filter(x=>Array.isArray(x)&&x.length>=2);
@@ -423,7 +425,7 @@ async function getRoute(){
   }
   if(!segments.length)throw new Error('No maritime route geometry was returned.');
   const geometry=segments.length===1?{type:'LineString',coordinates:segments[0]}:{type:'MultiLineString',coordinates:segments};
-  return {geometry,distanceKm:totalDistanceKm,totalDistanceKm,routeEngine,restrictions,waypointCount:waypoints.length};
+  return {geometry,distanceKm:totalDistanceKm,totalDistanceKm,routeEngine,restrictions,waypointCount:waypoints.length,allowArctic};
 }
 
 $('route').onclick=async()=>{
@@ -437,7 +439,7 @@ $('route').onclick=async()=>{
     $('dist').textContent=kmToNm(r.totalDistanceKm).toFixed(0)+' NM';
     $('npts').textContent=r.geometry.type==='MultiLineString'?r.geometry.coordinates.reduce((n,x)=>n+x.length,0):r.geometry.coordinates.length;
     $('restrictions').textContent=r.restrictions.length?r.restrictions.join(', '):'None';
-    status(`Maritime route calculated successfully. ${kmToNm(r.totalDistanceKm).toFixed(0)} NM total with ${r.waypointCount} intermediate waypoint${r.waypointCount===1?'':'s'}.`+(r.restrictions.length?` Avoided: ${r.restrictions.join(', ')}.`:''));
+    status(`Maritime route calculated successfully. ${kmToNm(r.totalDistanceKm).toFixed(0)} NM total with ${r.waypointCount} intermediate waypoint${r.waypointCount===1?'':'s'}.`+(r.restrictions.length?` Avoided: ${r.restrictions.join(', ')}.`:'')+(r.allowArctic?' Arctic passages enabled; no sea-ice model is applied.':''));
     $('waves').disabled=false;
   }catch(e){console.error(e);status(e.message||'Route calculation failed.',true);}finally{$('route').disabled=false;}
 };
