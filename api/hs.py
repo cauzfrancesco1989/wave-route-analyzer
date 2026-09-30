@@ -57,67 +57,27 @@ def has_valid_vhm0(df):
 
 
 def get_wave_dataframe(lon, lat, start, end):
-    """Select the global or Arctic wave product and stitch Arctic products when needed.
+    """Return the historical wave time series for one route point.
 
-    The global WAVERYS product is global, but Arctic route points can be masked by sea ice.
-    Copernicus provides a dedicated Arctic wave model north of 63°N, with a 3 km grid.
-    Points south of 63°N must remain on the global product even when the maritime
-    route itself has Arctic routing enabled.
-    For dates through 31 Jul 2025 use the Arctic multi-year hindcast; for newer dates use
-    the Arctic analysis/forecast dataset. When a requested interval spans the boundary,
-    stitch the two non-overlapping periods together.
+    The Arctic route itself is independent from the wave-data source.  The
+    Copernicus Arctic wave products are geographically appropriate north of
+    63 N, but their current dataset entries do not expose the ``timeseries``
+    service used by ``read_dataframe`` in this deployment (the API reports
+    ``ServiceNotAvailable: Available services for dataset: []``).  Therefore
+    the robust point-series path uses the global WAVERYS dataset for Arctic
+    route points as well.  WAVERYS is explicitly global (-89.8 to 89.8 deg)
+    and contains VHM0 and VMDR on the same 0.2 deg grid used elsewhere in the
+    app.
+
+    ``is_arctic`` is retained as a presentation/diagnostic flag so the UI can
+    still distinguish Arctic route points and render their directional roses
+    accordingly.  It does NOT change the routing geometry or the sampling.
     """
-    if float(lat) < ARCTIC_THRESHOLD_LAT:
-        df = read_point_dataset(DATASET_ID, lon, lat, start, end)
-        return df, "Global WAVERYS", False
-
-    req_start = pd.Timestamp(start)
-    req_end = pd.Timestamp(end)
-    frames = []
-    sources = []
-
-    # Older Arctic history: 1964-07-31.
-    my_start = max(req_start, ARCTIC_MY_START)
-    my_end = min(req_end, ARCTIC_MY_END)
-    if my_start <= my_end:
-        df_my = read_point_dataset(ARCTIC_MY_DATASET_ID, lon, lat, my_start.to_pydatetime(), my_end.to_pydatetime())
-        if df_my is not None and len(df_my) and has_valid_vhm0(df_my):
-            frames.append(df_my)
-            sources.append("Arctic multi-year hindcast")
-
-    # Recent Arctic history / analysis: 2022-08-01 to current.
-    nrt_start = max(req_start, ARCTIC_NRT_START, ARCTIC_MY_END + pd.Timedelta(hours=1))
-    if nrt_start <= req_end:
-        df_nrt = read_point_dataset(ARCTIC_NRT_DATASET_ID, lon, lat, nrt_start.to_pydatetime(), req_end.to_pydatetime())
-        if df_nrt is not None and len(df_nrt) and has_valid_vhm0(df_nrt):
-            frames.append(df_nrt)
-            sources.append("Arctic analysis/forecast")
-
-    if not frames:
-        # The dedicated Arctic products are the primary source for Arctic points.
-        # If they contain no valid time series at the exact grid point (for example
-        # because the point is masked by sea ice), make one explicit fallback query
-        # to the global product so the route point is not silently lost. The result
-        # remains flagged as an Arctic point and the diagnostic identifies the fallback.
-        try:
-            df_global = read_point_dataset(DATASET_ID, lon, lat, start, end)
-            if df_global is not None and len(df_global):
-                return df_global, "Arctic point — Global WAVERYS fallback", True
-        except Exception:
-            pass
-        return pd.DataFrame(), "Arctic wave products returned no data", True
-
-    df = pd.concat(frames, axis=0)
-    # The stitched ranges are intentionally non-overlapping, but de-duplicate defensively.
-    try:
-        if isinstance(df.index, pd.DatetimeIndex):
-            df = df[~df.index.duplicated(keep="first")].sort_index()
-        elif "time" in df.columns:
-            df = df.drop_duplicates(subset=["time"]).sort_values("time")
-    except Exception:
-        pass
-    return df, " + ".join(dict.fromkeys(sources)), True
-
+    is_arctic = float(lat) >= ARCTIC_THRESHOLD_LAT
+    df = read_point_dataset(DATASET_ID, lon, lat, start, end)
+    if is_arctic:
+        return df, "Global WAVERYS — Arctic route point", True
+    return df, "Global WAVERYS", False
 
 def summarize_point(lon, lat, start, end, season):
     is_arctic = float(lat) >= ARCTIC_THRESHOLD_LAT

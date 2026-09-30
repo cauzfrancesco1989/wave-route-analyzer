@@ -491,7 +491,7 @@ $('waves').onclick=async()=>{
     $('p95').textContent=sP95? sP95.p95.toFixed(2)+' m':'—';
     $('p99').textContent=sP99? sP99.p99.toFixed(2)+' m':'—';
     draw(rows);$('csv').disabled=false;const seasonInfo=season==='all'?'All seasons':`${seasonLabel} — same months retained in every year of the selected period`;
-    status(`Completed ${rows.length} sampled points. Historical Hs + wave-direction distribution (VMDR) from Copernicus Marine. Arctic points use the dedicated Arctic wave product when applicable. Click a vessel symbol to open the directional rose. ${seasonInfo}.`);
+    status(`Completed ${rows.length} sampled points. Historical Hs + wave-direction distribution (VMDR) from Copernicus Marine. Arctic route points use the global WAVERYS point series; Arctic status is retained for map/rose visualization. Click a vessel symbol to open the directional rose. ${seasonInfo}.`);
   }catch(e){console.error(e);status(e.message||'Historical Hs calculation failed.',true);}finally{$('waves').disabled=false;}
 };
 function draw(rows){if(chart)chart.destroy();chart=new Chart($('chart'),{type:'line',data:{labels:rows.map(r=>kmToNm(r.distanceKm).toFixed(0)),datasets:[{label:'Mean Hs',data:rows.map(r=>r.mean),borderWidth:2,pointRadius:2,tension:.15},{label:'P95 Hs',data:rows.map(r=>r.p95),borderWidth:1,pointRadius:1,borderDash:[5,5],tension:.15}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Distance (NM)'}},y:{title:{display:true,text:'Hs (m)'},beginAtZero:true}}}});}
